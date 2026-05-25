@@ -2,7 +2,9 @@
 
 统一身份认证服务（OIDC Provider），独立部署在 `auth.aiprd.club`，为 `ai-course-copilot` 等 AI 工具产品提供单点登录与跨产品账户互通。
 
-> 详细规格见 `~/Documents/LiCode/ai-course-copilot/docs/ai-workshop-sso-spec.md`。本仓库当前处于 **Phase 0 骨架阶段**：项目结构、依赖、Prisma schema、库文件占位、路由占位、JWKS 与 Discovery 已就绪；具体业务逻辑（oidc-provider 适配器、登录/注册、SSO Cookie 流程、限频、邮件）待实现。
+> 详细规格见 `~/Documents/LiCode/ai-course-copilot/docs/ai-workshop-sso-spec.md`。
+>
+> **当前进度：Phase 0 / M1 已完成** — oidc-provider 通过 Prisma adapter 接到 Postgres、custom server 同进程托管 OIDC + Next、注册/登录闭环 + SSO Cookie、Discovery/JWKS 由 oidc-provider 自动暴露。下一步 M2：`/oauth/authorize` SSO 短路 + Refresh Token Rotation 复用检测。
 
 ---
 
@@ -46,8 +48,10 @@ pnpm dev          # http://localhost:3000
 健康端点：
 
 - http://localhost:3000 — 导航首页
-- http://localhost:3000/api/well-known/openid-configuration — Discovery
-- http://localhost:3000/api/well-known/jwks.json — JWKS（首次访问自动生成 RSA 2048 keypair 并加密存入 DB）
+- http://localhost:3000/oidc/.well-known/openid-configuration — Discovery（由 oidc-provider 自动生成）
+- http://localhost:3000/oidc/jwks — JWKS（首次访问自动生成 RSA 2048 keypair 并加密存入 DB）
+
+> M1 起 OIDC 协议路由全部挂在 `/oidc/*` 前缀下，由 [src/server.ts](src/server.ts) 同进程的自定义 Node server 转发给 oidc-provider；其余路由仍走 Next.js handler。因此 `output: "standalone"` 已关闭（与 custom server 不兼容）。
 
 > 如果你本地已有原生 Postgres / Redis，跳过 `docker compose up` 即可，只要 `DATABASE_URL` / `REDIS_URL` 指对即可。
 
@@ -75,7 +79,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.production \
   exec app sh -c 'pnpm prisma migrate deploy'
 ```
 
-栈结构：`caddy` → `app` (Next.js standalone, 3000) → `postgres` / `redis`。Caddy 会自动申请并续期 Let's Encrypt 证书，配置在 `deploy/Caddyfile`，已包含 HSTS / CSP / X-Frame-Options 等头。
+栈结构：`caddy` → `app` (custom Node server via `tsx src/server.ts`，端口 3000) → `postgres` / `redis`。Caddy 会自动申请并续期 Let's Encrypt 证书，配置在 `deploy/Caddyfile`，已包含 HSTS / CSP / X-Frame-Options 等头。
 
 回滚 / 升级：`docker compose -f docker-compose.prod.yml pull && up -d`（用镜像仓库）或重新 `build && up -d`（本地构建）。
 
@@ -112,7 +116,10 @@ ai-workshop-sso/
 │   │   ├── audit.ts          ✓  AuditLog 写入
 │   │   ├── email.ts          ✓  EmailService 抽象（默认 console，不真发）
 │   │   ├── auth-state.ts     ✓  PKCE / state 工具
-│   │   └── oidc-provider.ts  ◐  框架就绪，Prisma 适配器待补
+│   │   ├── oidc-adapter.ts   ✓  PrismaAdapter（OidcModel 单表存储）
+│   │   ├── interaction.ts    ✓  bridge：Next 路由完成 oidc-provider Interaction
+│   │   └── oidc-provider.ts  ✓  Prisma adapter + DB clients + 私钥 JWKS
+│   ├── server.ts             ✓  custom Node server：/oidc/* 转 oidc-provider，其余走 Next
 │   └── middleware.ts         ✓  /api/internal/* 鉴权
 ├── deploy/
 │   └── Caddyfile             ✓  auth.aiprd.club 自动 HTTPS + 安全头
@@ -129,15 +136,13 @@ ai-workshop-sso/
 
 图例：✓ 完成 ｜ ◐ 部分实现 ｜ TODO 待做
 
-## 当前 Phase 0 待办（按规格 Section 12）
+## Phase 0 里程碑进度
 
-1. **oidc-provider Prisma 适配器** — 把 AuthorizationCode / RefreshToken / Session / OAuthClient 模型接到 `oidc-provider` 的存储接口。
-2. **登录 / 注册 / 登出业务路由** — `/api/login`、`/api/register`、`/api/logout` 走 zod 校验、argon2 哈希、HIBP 弱密码、限频、审计、写 SSO Cookie，并与 oidc-provider 的 interaction 流程对接。
-3. **Refresh Token Rotation** — 重用旧 token 立即吊销整条 Session，写 `token_refresh_reuse_detected` 审计。
-4. **/oauth/authorize** — 已有 SSO Cookie 直接颁发 code；否则 302 跳 `/login?interaction=...`。
-5. **找回密码 / 邮箱验证** — 邮件服务接通。
-6. **Demo Client** — 独立小脚本/页面验证完整 OIDC + SSO 流程。
-7. **安全 Checklist（Section 10）** — 逐项确认后 commit。
+| 里程碑 | 范围 | 状态 |
+|---|---|---|
+| **M1** | OIDC PrismaAdapter；custom server 同进程托管 OIDC + Next；`/api/register` + `/api/login` zod/argon2/限频/审计；登录后调 oidc-provider Interaction 完成 OIDC flow；Discovery/JWKS 交还 oidc-provider；Vitest 起步 | ✓ 完成（本 PR） |
+| **M2** | `/oauth/authorize` 自定义 policy 读 SSO Cookie → `loginAccount` 短路；Refresh Token Rotation + 复用检测吊销整条 Grant；/account 设备列表 + 撤销；/api/logout 清 cookie + 撤销 Session | TODO |
+| **M3** | 内部 API（clients / users.import / keys.rotate / users[id]/disable）；`scripts/demo-client.ts`（openid-client + jose 验签 + 二次 authorize 验 SSO）；HIBP 弱密码 + 邮箱验证 token + CSP 精修；Section 10 安全 Checklist 对照表 | TODO |
 
 ## 安全提醒
 

@@ -70,13 +70,40 @@ export async function getCurrentSigningKey(): Promise<LoadedKey> {
   return { kid: row.kid, algorithm: row.algorithm, publicKey, privateKey };
 }
 
+/**
+ * Private JWKs (active + retired) for oidc-provider's `jwks` config.
+ * oidc-provider auto-publishes the public side at /jwks; we keep retired
+ * keys around so previously issued tokens still verify until rotation
+ * fully drains.
+ */
+export async function getAllPrivateJwks(): Promise<{ keys: JWK[] }> {
+  const rows = await prisma.signingKey.findMany({
+    where: { status: { in: ["ACTIVE", "RETIRED"] } },
+    orderBy: { createdAt: "desc" },
+  });
+  const keys = await Promise.all(
+    rows.map(async (row: typeof rows[number]) => {
+      const privateKeyPem = decryptSecret(row.privateKeyPem);
+      // extractable:true is required so jose can later exportJWK() it for
+      // oidc-provider's `jwks` config. PKCS8 imports default to non-extractable.
+      const privateKey = await importPKCS8(privateKeyPem, row.algorithm, { extractable: true });
+      const jwk = await exportJWK(privateKey);
+      jwk.kid = row.kid;
+      jwk.alg = row.algorithm;
+      jwk.use = "sig";
+      return jwk;
+    }),
+  );
+  return { keys };
+}
+
 export async function getAllPublicJwks(): Promise<{ keys: JWK[] }> {
   const rows = await prisma.signingKey.findMany({
     where: { status: { in: ["ACTIVE", "RETIRED"] } },
     orderBy: { createdAt: "desc" },
   });
   const keys = await Promise.all(
-    rows.map(async (row) => {
+    rows.map(async (row: typeof rows[number]) => {
       const publicKey = await importSPKI(row.publicKeyPem, row.algorithm);
       const jwk = await exportJWK(publicKey);
       jwk.kid = row.kid;

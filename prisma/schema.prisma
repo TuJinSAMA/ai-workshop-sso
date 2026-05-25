@@ -52,28 +52,34 @@ model Session {
   createdAt       DateTime @default(now())
 
   user            User @relation(fields: [userId], references: [id])
-  refreshTokens   RefreshToken[]
 
   @@index([userId])
 }
 
-model RefreshToken {
-  id              String   @id @default(uuid())
-  sessionId       String
-  clientId        String
+// Generic storage for all oidc-provider internal models
+// (AccessToken / AuthorizationCode / RefreshToken / Grant / Session /
+//  Interaction / ReplayDetection / IdToken / DeviceCode / ClientCredentials /
+//  BackchannelAuthenticationRequest / PushedAuthorizationRequest).
+// `id` is `<model>:<uid>` so we can store every model in one table.
+// Reuse-detection (M2) queries by model='RefreshToken' + consumed=true.
+model OidcModel {
+  id        String    @id
+  model     String
+  payload   Json
+  expiresAt DateTime?
+  grantId   String?
+  userCode  String?
+  uid       String?
+  consumed  Boolean   @default(false)
 
-  tokenHash       String   @unique
-  expiresAt       DateTime
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  rotatedFromId   String?
-  revokedAt       DateTime?
-  usedAt          DateTime?
-
-  createdAt       DateTime @default(now())
-
-  session         Session @relation(fields: [sessionId], references: [id])
-
-  @@index([sessionId])
+  @@index([model])
+  @@index([grantId])
+  @@index([uid])
+  @@index([userCode])
+  @@index([expiresAt])
 }
 
 model OAuthClient {
@@ -84,21 +90,6 @@ model OAuthClient {
   postLogoutRedirectUris String[]
   allowedScopes          String[]
   createdAt              DateTime @default(now())
-}
-
-model AuthorizationCode {
-  code                String   @id
-  clientId            String
-  userId              String
-  redirectUri         String
-  scope               String
-  codeChallenge       String
-  codeChallengeMethod String
-
-  expiresAt           DateTime
-  consumedAt          DateTime?
-
-  createdAt           DateTime @default(now())
 }
 
 model SigningKey {
