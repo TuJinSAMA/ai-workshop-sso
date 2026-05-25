@@ -14,36 +14,74 @@
 - **argon2** — 密码哈希（argon2id）
 - **jose** — JWT 签名 / JWKS
 - **zod** — 入参与环境变量校验
-- **@upstash/ratelimit + Upstash Redis** — 登录限频
-- **Resend** — 邮件（抽象为 `EmailService` 接口，可替换为阿里云邮件推送）
+- **ioredis + rate-limiter-flexible** — 登录限频（普通 Redis 协议，无平台绑定）
+- **Email**：抽象为 `EmailService` 接口；Phase 0 默认 `console`（只打日志、不真发）。后续接 Resend / 阿里云邮件推送只需切 `EMAIL_PROVIDER`
+- **Docker + Caddy**：生产部署在阿里云 ECS，Caddy 自动签发 `auth.aiprd.club` 的 Let's Encrypt 证书
 
-## 快速开始
+## 本地开发
+
+推荐方式：用 `docker-compose.yml` 起 Postgres + Redis（数据本地持久化），应用本身在宿主机 `pnpm dev` 跑（保留 HMR）。
 
 ```bash
-# 1. 安装依赖（已完成）
-pnpm install
-
-# 2. 准备环境变量
+# 1. 准备环境变量
 cp .env.example .env
-# 编辑 .env，填写真实 DATABASE_URL、COOKIE_SECRET、INTERNAL_API_TOKEN
+# 默认值已经能跑（postgres/postgres @ localhost:5432，redis @ localhost:6379）
 
-# 3. 准备本地 Postgres（按你本地 Postgres 用户密码改 DATABASE_URL）
-createdb ai_workshop_sso
+# 2. 启动基础设施
+docker compose up -d
+docker compose ps    # 等 postgres / redis 都 healthy
 
-# 4. 执行 Prisma 迁移
+# 3. 执行 Prisma 迁移
 pnpm prisma migrate dev --name init
 
-# 5. 注册一个 demo 客户端（输出 client_secret 一次）
+# 4. (可选) 注册一个 demo 客户端
 pnpm seed:clients
 
-# 6. 启动开发服务器
+# 5. 启动开发服务器
 pnpm dev          # http://localhost:3000
 ```
 
-打开 http://localhost:3000 应该看到导航首页。Discovery / JWKS 端点：
+健康端点：
 
-- http://localhost:3000/api/well-known/openid-configuration
-- http://localhost:3000/api/well-known/jwks.json （首次访问会自动生成并持久化 RSA 2048 keypair）
+- http://localhost:3000 — 导航首页
+- http://localhost:3000/api/well-known/openid-configuration — Discovery
+- http://localhost:3000/api/well-known/jwks.json — JWKS（首次访问自动生成 RSA 2048 keypair 并加密存入 DB）
+
+> 如果你本地已有原生 Postgres / Redis，跳过 `docker compose up` 即可，只要 `DATABASE_URL` / `REDIS_URL` 指对即可。
+
+## 部署到阿里云 ECS（Docker + Caddy）
+
+前置条件：
+
+1. 阿里云安全组放开 **80** 和 **443**（Caddy 自动签证书要用 80 验证 HTTP-01）。
+2. `auth.aiprd.club` 的 A 记录指向你的 ECS 公网 IP，**先解析生效再启动 Caddy**。
+3. 服务器上装好 Docker + Docker Compose plugin。
+
+部署步骤：
+
+```bash
+# 在服务器上 clone 仓库后：
+cp .env.example .env.production
+# 用 openssl rand -hex 32 生成 COOKIE_SECRET / INTERNAL_API_TOKEN / JWKS_ENCRYPTION_KEY
+# 设 POSTGRES_PASSWORD、ISSUER_URL=https://auth.aiprd.club、SSO_COOKIE_DOMAIN=.aiprd.club
+
+docker compose -f docker-compose.prod.yml --env-file .env.production build
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+
+# 首次部署执行迁移：
+docker compose -f docker-compose.prod.yml --env-file .env.production \
+  exec app sh -c 'pnpm prisma migrate deploy'
+```
+
+栈结构：`caddy` → `app` (Next.js standalone, 3000) → `postgres` / `redis`。Caddy 会自动申请并续期 Let's Encrypt 证书，配置在 `deploy/Caddyfile`，已包含 HSTS / CSP / X-Frame-Options 等头。
+
+回滚 / 升级：`docker compose -f docker-compose.prod.yml pull && up -d`（用镜像仓库）或重新 `build && up -d`（本地构建）。
+
+## 关于私钥与 KMS
+
+- 当前 JWKS 私钥用 **AES-256-GCM 加密后**存入 `SigningKey.privateKeyPem` 列。
+- 主密钥来源：`JWKS_ENCRYPTION_KEY` 环境变量（32 字节 hex），未配置时从 `COOKIE_SECRET` 派生（仅 dev 可接受）。
+- **KMS 不是必需**。阿里云 KMS 按调用次数 + 密钥实例费收费，Phase 0 不上 KMS 完全没问题。后续若想升级，只需把 `src/lib/crypto.ts` 的 `getMasterKey()` 换成 KMS Decrypt 调用。
 
 ## 目录结构
 
@@ -62,16 +100,23 @@ ai-workshop-sso/
 │   │       └── internal/{users,clients,keys}/                     (TODO)
 │   ├── lib/
 │   │   ├── env.ts            ✓  zod 校验 + 缓存
-│   │   ├── db.ts             ✓  PrismaClient 单例
+│   │   ├── db.ts             ✓  PrismaClient 单例（pg adapter）
+│   │   ├── redis.ts          ✓  ioredis 单例
 │   │   ├── password.ts       ✓  argon2id + verifyAndUpgrade()
-│   │   ├── jwks.ts           ✓  DB-backed JWKS 加载/轮换
+│   │   ├── jwks.ts           ✓  DB-backed JWKS（私钥 AES-256-GCM 加密）
+│   │   ├── crypto.ts         ✓  AES-256-GCM at-rest secret 加解密
 │   │   ├── cookies.ts        ✓  SSO Cookie 工具
-│   │   ├── rate-limit.ts     ✓  Upstash 限频（无配置则 no-op）
+│   │   ├── rate-limit.ts     ✓  Redis sliding window（无 REDIS_URL 退化为内存）
 │   │   ├── audit.ts          ✓  AuditLog 写入
-│   │   ├── email.ts          ✓  EmailService 抽象（Resend / Console）
+│   │   ├── email.ts          ✓  EmailService 抽象（默认 console，不真发）
 │   │   ├── auth-state.ts     ✓  PKCE / state 工具
 │   │   └── oidc-provider.ts  ◐  框架就绪，Prisma 适配器待补
 │   └── middleware.ts         ✓  /api/internal/* 鉴权
+├── deploy/
+│   └── Caddyfile             ✓  auth.aiprd.club 自动 HTTPS + 安全头
+├── docker-compose.yml        ✓  本地 dev infra（pg + redis）
+├── docker-compose.prod.yml   ✓  生产全栈（pg + redis + app + caddy）
+├── Dockerfile                ✓  Next.js standalone 多阶段构建
 ├── scripts/
 │   ├── seed-clients.ts       ◐
 │   ├── rotate-keys.ts        ✓

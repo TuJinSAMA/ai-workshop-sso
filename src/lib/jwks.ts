@@ -1,5 +1,6 @@
 import { exportJWK, importPKCS8, importSPKI, generateKeyPair, type JWK } from "jose";
 import { prisma } from "./db";
+import { decryptSecret, encryptSecret } from "./crypto";
 
 // JWKS loading + rotation helpers. See spec Section 12.5.
 //
@@ -31,8 +32,15 @@ async function generateAndStoreActiveKey(): Promise<{
     exportPemFromKey(privateKey, "PRIVATE KEY"),
   ]);
   const kid = crypto.randomUUID();
+  // privateKeyPem is encrypted at rest; only decrypted in-process when signing.
   await prisma.signingKey.create({
-    data: { kid, algorithm: "RS256", publicKeyPem, privateKeyPem, status: "ACTIVE" },
+    data: {
+      kid,
+      algorithm: "RS256",
+      publicKeyPem,
+      privateKeyPem: encryptSecret(privateKeyPem),
+      status: "ACTIVE",
+    },
   });
   return { kid, algorithm: "RS256", publicKeyPem, privateKeyPem };
 }
@@ -54,9 +62,10 @@ export async function getCurrentSigningKey(): Promise<LoadedKey> {
     const created = await generateAndStoreActiveKey();
     row = await prisma.signingKey.findUniqueOrThrow({ where: { kid: created.kid } });
   }
+  const privateKeyPem = decryptSecret(row.privateKeyPem);
   const [publicKey, privateKey] = await Promise.all([
     importSPKI(row.publicKeyPem, row.algorithm),
-    importPKCS8(row.privateKeyPem, row.algorithm),
+    importPKCS8(privateKeyPem, row.algorithm),
   ]);
   return { kid: row.kid, algorithm: row.algorithm, publicKey, privateKey };
 }

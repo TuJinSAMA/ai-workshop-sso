@@ -44,10 +44,16 @@ let cached: EmailService | null = null;
 export function emailService(): EmailService {
   if (cached) return cached;
   const e = env();
-  // Fall back to console logging when Resend is not configured — useful for
-  // local development and unit tests.
-  if (e.EMAIL_PROVIDER === "resend" && e.RESEND_API_KEY) {
-    cached = new ResendEmailService();
+  // Phase 0 default: log instead of sending (so the SSO flow can be tested
+  // end-to-end without provisioning Resend/aliyun email). Switch to "resend"
+  // in .env once the email service is opened up.
+  if (e.EMAIL_PROVIDER === "resend") {
+    if (!e.RESEND_API_KEY) {
+      console.warn("[email] EMAIL_PROVIDER=resend but RESEND_API_KEY is empty; falling back to console");
+      cached = new ConsoleEmailService();
+    } else {
+      cached = new ResendEmailService();
+    }
   } else {
     cached = new ConsoleEmailService();
   }

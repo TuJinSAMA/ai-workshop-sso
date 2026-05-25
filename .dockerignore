@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.env
+.env.*
+!.env.example
+*.log
+coverage
+.DS_Store
+README.md
+deploy/caddy_data
+deploy/caddy_config

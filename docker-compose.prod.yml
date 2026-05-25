@@ -1,0 +1,90 @@
+# Production stack for 阿里云 ECS deployment.
+#
+# Bring-up:
+#   1. cp .env.example .env.production   (fill real secrets, ISSUER_URL=https://auth.aiprd.club)
+#   2. docker compose -f docker-compose.prod.yml --env-file .env.production build
+#   3. docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+#   4. docker compose -f docker-compose.prod.yml exec app pnpm prisma migrate deploy
+#
+# Caddy handles automatic HTTPS via Let's Encrypt for auth.aiprd.club.
+# Port 80/443 must be open on the security group and the A record for
+# auth.aiprd.club must point at this server BEFORE first start.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-ai_workshop_sso}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ai-workshop-sso:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      ISSUER_URL: ${ISSUER_URL:?ISSUER_URL is required (https://auth.aiprd.club)}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ai_workshop_sso}?schema=public
+      REDIS_URL: redis://redis:6379
+      COOKIE_SECRET: ${COOKIE_SECRET:?COOKIE_SECRET is required}
+      SSO_COOKIE_NAME: ${SSO_COOKIE_NAME:-aiprd_sso}
+      SSO_COOKIE_DOMAIN: ${SSO_COOKIE_DOMAIN:-.aiprd.club}
+      SSO_COOKIE_TTL_DAYS: ${SSO_COOKIE_TTL_DAYS:-30}
+      ACCESS_TOKEN_TTL_MINUTES: ${ACCESS_TOKEN_TTL_MINUTES:-15}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-30}
+      AUTH_CODE_TTL_MINUTES: ${AUTH_CODE_TTL_MINUTES:-5}
+      JWKS_ENCRYPTION_KEY: ${JWKS_ENCRYPTION_KEY:?JWKS_ENCRYPTION_KEY is required in prod}
+      JWKS_ROTATION_MONTHS: ${JWKS_ROTATION_MONTHS:-6}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@aiprd.club}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
