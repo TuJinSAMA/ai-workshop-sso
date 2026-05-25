@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  emailVerified   Boolean  @default(false)
+  passwordHash    String?
+  passwordAlgo    String   @default("argon2id")
+  legacySalt      String?
+
+  displayName     String?
+  avatarUrl       String?
+  status          UserStatus @default(ACTIVE)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sessions        Session[]
+  identities      Identity[]
+  loginAttempts   LoginAttempt[]
+
+  @@index([email])
+}
+
+model Identity {
+  id          String   @id @default(uuid())
+  userId      String
+  provider    String
+  providerId  String
+
+  user        User @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerId])
+}
+
+model Session {
+  id              String   @id @default(uuid())
+  userId          String
+
+  userAgent       String?
+  ipAddress       String?
+
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  lastActiveAt    DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  user            User @relation(fields: [userId], references: [id])
+  refreshTokens   RefreshToken[]
+
+  @@index([userId])
+}
+
+model RefreshToken {
+  id              String   @id @default(uuid())
+  sessionId       String
+  clientId        String
+
+  tokenHash       String   @unique
+  expiresAt       DateTime
+
+  rotatedFromId   String?
+  revokedAt       DateTime?
+  usedAt          DateTime?
+
+  createdAt       DateTime @default(now())
+
+  session         Session @relation(fields: [sessionId], references: [id])
+
+  @@index([sessionId])
+}
+
+model OAuthClient {
+  clientId               String   @id
+  clientSecretHash       String
+  name                   String
+  redirectUris           String[]
+  postLogoutRedirectUris String[]
+  allowedScopes          String[]
+  createdAt              DateTime @default(now())
+}
+
+model AuthorizationCode {
+  code                String   @id
+  clientId            String
+  userId              String
+  redirectUri         String
+  scope               String
+  codeChallenge       String
+  codeChallengeMethod String
+
+  expiresAt           DateTime
+  consumedAt          DateTime?
+
+  createdAt           DateTime @default(now())
+}
+
+model SigningKey {
+  kid             String   @id
+  algorithm       String
+  publicKeyPem    String
+  privateKeyPem   String
+  status          KeyStatus
+  createdAt       DateTime @default(now())
+  retiredAt       DateTime?
+}
+
+model LoginAttempt {
+  id              String   @id @default(uuid())
+  userId          String?
+  email           String
+  ipAddress       String
+  success         Boolean
+  failReason      String?
+  createdAt       DateTime @default(now())
+
+  user            User? @relation(fields: [userId], references: [id])
+
+  @@index([email, createdAt])
+  @@index([ipAddress, createdAt])
+}
+
+model AuditLog {
+  id              String   @id @default(uuid())
+  userId          String?
+  event           String
+  ipAddress       String?
+  userAgent       String?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([event, createdAt])
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+  DELETED
+}
+
+enum KeyStatus {
+  ACTIVE
+  RETIRED
+}
