@@ -20,16 +20,16 @@
 
 ## 本地开发
 
-推荐方式：用 `docker-compose.yml` 起 Postgres + Redis（数据本地持久化），应用本身在宿主机 `pnpm dev` 跑（保留 HMR）。
+前提：本地已有 Redis 在 `127.0.0.1:6379` 跑（`redis-cli ping` 返 PONG）。Postgres 用 docker 起就行；应用本身在宿主机 `pnpm dev` 跑（保留 HMR）。
 
 ```bash
 # 1. 准备环境变量
 cp .env.example .env
 # 默认值已经能跑（postgres/postgres @ localhost:5432，redis @ localhost:6379）
 
-# 2. 启动基础设施
+# 2. 启动 Postgres（Redis 走你本机已有的实例）
 docker compose up -d
-docker compose ps    # 等 postgres / redis 都 healthy
+docker compose ps    # 等 postgres healthy
 
 # 3. 执行 Prisma 迁移
 pnpm prisma migrate dev --name init
@@ -40,6 +40,8 @@ pnpm seed:clients
 # 5. 启动开发服务器
 pnpm dev          # http://localhost:3000
 ```
+
+> 如果你想完全脱离 docker，本地用原生 Postgres 也行，把 `DATABASE_URL` 指向你的实例即可，跳过 `docker compose up`。
 
 健康端点：
 
