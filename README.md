@@ -4,7 +4,7 @@
 
 > 详细规格见 `~/Documents/LiCode/ai-course-copilot/docs/ai-workshop-sso-spec.md`。
 >
-> **当前进度：Phase 0 / M1 已完成** — oidc-provider 通过 Prisma adapter 接到 Postgres、custom server 同进程托管 OIDC + Next、注册/登录闭环 + SSO Cookie、Discovery/JWKS 由 oidc-provider 自动暴露。下一步 M2：`/oauth/authorize` SSO 短路 + Refresh Token Rotation 复用检测。
+> **当前进度：Phase 0 / M2 已完成** — 在 M1（PrismaAdapter + custom server + 注册/登录闭环）基础上加入：`/oidc/auth` SSO 短路（interactionPolicy 注入 sso_cookie Check）、Refresh Token Rotation + 复用检测审计、`/account` 设备列表 + 撤销、`/api/logout` 真清 cookie + Session。下一步 M3：内部 API、HIBP 弱密码、邮箱验证 token、Section 10 安全 Checklist。
 
 ---
 
@@ -141,7 +141,7 @@ ai-workshop-sso/
 | 里程碑 | 范围 | 状态 |
 |---|---|---|
 | **M1** | OIDC PrismaAdapter；custom server 同进程托管 OIDC + Next；`/api/register` + `/api/login` zod/argon2/限频/审计；登录后调 oidc-provider Interaction 完成 OIDC flow；Discovery/JWKS 交还 oidc-provider；Vitest 起步 | ✓ 完成（本 PR） |
-| **M2** | `/oauth/authorize` 自定义 policy 读 SSO Cookie → `loginAccount` 短路；Refresh Token Rotation + 复用检测吊销整条 Grant；/account 设备列表 + 撤销；/api/logout 清 cookie + 撤销 Session | TODO |
+| **M2** | `/oidc/auth` interactionPolicy 注入 sso_cookie Check → 命中 `aiprd_sso` 直接 `loginAccount`；显式 `rotateRefreshToken: true` + `grant.revoked` / `grant.success` 钩子写 `token_refresh_reuse_detected` / `token_issued` / `token_refreshed` / `session_revoked` 审计；/account 服务端组件列设备 + 撤销按钮；`/api/sessions/[id]/revoke` 同步 revokeByGrantId 兜底；/api/logout 真清 SSO cookie + Session.revokedAt + 启用 rpInitiatedLogout | ✓ 完成（本 PR） |
 | **M3** | 内部 API（clients / users.import / keys.rotate / users[id]/disable）；`scripts/demo-client.ts`（openid-client + jose 验签 + 二次 authorize 验 SSO）；HIBP 弱密码 + 邮箱验证 token + CSP 精修；Section 10 安全 Checklist 对照表 | TODO |
 
 ## 安全提醒
