@@ -115,4 +115,30 @@ describe("PrismaAdapter", () => {
     const found = await a.findByUid("u-1");
     expect(found).toMatchObject({ uid: "u-1" });
   });
+
+  it("find(RefreshToken) after consume returns payload with epoch consumed", async () => {
+    const rt = new PrismaAdapter("RefreshToken");
+    await rt.upsert("rt-reuse", { grantId: "G1", scope: "openid" } as never, 60);
+    await rt.consume("rt-reuse");
+    const found = await rt.find("rt-reuse");
+    expect(found).toBeDefined();
+    expect((found as { consumed?: number }).consumed).toBeGreaterThan(0);
+  });
+
+  it("revokeByGrantId clears AccessToken+RefreshToken for one grant only", async () => {
+    const at = new PrismaAdapter("AccessToken");
+    const rt = new PrismaAdapter("RefreshToken");
+    await at.upsert("a-g1", { grantId: "G1" } as never, 60);
+    await rt.upsert("r-g1", { grantId: "G1" } as never, 60);
+    await at.upsert("a-g2", { grantId: "G2" } as never, 60);
+    await rt.upsert("r-g2", { grantId: "G2" } as never, 60);
+
+    await at.revokeByGrantId("G1");
+    await rt.revokeByGrantId("G1");
+
+    expect(await at.find("a-g1")).toBeUndefined();
+    expect(await rt.find("r-g1")).toBeUndefined();
+    expect(await at.find("a-g2")).toBeDefined();
+    expect(await rt.find("r-g2")).toBeDefined();
+  });
 });
