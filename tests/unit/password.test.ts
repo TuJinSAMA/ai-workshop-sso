@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import bcryptjs from "bcryptjs";
 import { hashPassword, verifyPassword, verifyAndUpgrade } from "../../src/lib/password";
 
 describe("password", () => {
@@ -16,7 +17,20 @@ describe("password", () => {
     expect(r.upgradedHash).toBeUndefined();
   });
 
+  it("verifies bcrypt hashes (legacy algo support)", async () => {
+    const hash = await bcryptjs.hash("legacy-password", 10);
+    expect(await verifyPassword("legacy-password", hash, "bcrypt")).toBe(true);
+    expect(await verifyPassword("wrong", hash, "bcrypt")).toBe(false);
+  });
+
+  it("verifyAndUpgrade upgrades bcrypt to argon2id on success", async () => {
+    const hash = await bcryptjs.hash("old-password", 10);
+    const r = await verifyAndUpgrade("old-password", hash, "bcrypt");
+    expect(r.ok).toBe(true);
+    expect(r.upgradedHash).toMatch(/^\$argon2id\$/);
+  });
+
   it("rejects unsupported algos", async () => {
-    await expect(verifyPassword("x", "$bcrypt$abc", "bcrypt")).rejects.toThrow();
+    await expect(verifyPassword("x", "hash", "md5")).rejects.toThrow("Unsupported password algo: md5");
   });
 });

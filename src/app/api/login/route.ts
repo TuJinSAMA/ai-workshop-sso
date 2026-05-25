@@ -8,6 +8,7 @@ import { setSsoCookie } from "@/lib/cookies";
 import { audit } from "@/lib/audit";
 import { loginByEmail, loginByIp } from "@/lib/rate-limit";
 import { postAuthRedirect } from "@/lib/interaction";
+import { checkAndAlertAnomalousLogin } from "@/lib/login-anomaly";
 
 const Body = z.object({
   email: z.email().max(254),
@@ -113,6 +114,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   });
   await setSsoCookie(session.id);
   await audit({ event: "login", userId: user.id, ipAddress: ip, userAgent: ua });
+
+  // Anomaly detection: alert user if this is a new device/IP (non-blocking).
+  const loginAt = new Date();
+  checkAndAlertAnomalousLogin({
+    userId: user.id,
+    email,
+    ipAddress: ip,
+    userAgent: ua,
+    loginAt,
+  }).catch((err) => console.error("[login] Anomaly check error:", err));
 
   return postAuthRedirect(req, uid ?? null, user.id);
 }

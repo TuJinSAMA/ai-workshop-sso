@@ -1,4 +1,6 @@
 import argon2 from "argon2";
+import bcryptjs from "bcryptjs";
+import { createHash } from "node:crypto";
 
 // Argon2id parameters recommended by spec (Section 10).
 const ARGON2_OPTIONS: argon2.Options = {
@@ -27,9 +29,41 @@ export async function verifyPassword(
   if (algo === "argon2id") {
     return argon2.verify(hash, plain);
   }
-  // TODO(Phase 1): support bcrypt and any other legacy hashes carried over
-  // from ai-course-copilot's user import.
+  if (algo === "bcrypt") {
+    return bcryptjs.compare(plain, hash);
+  }
   throw new Error(`Unsupported password algo: ${algo}`);
+}
+
+/**
+ * Check password against HIBP k-anonymity API (spec §10).
+ * Returns true if the password has been seen in known data breaches.
+ * On network failure, logs and returns false to avoid blocking registration.
+ */
+export async function isPasswordPwned(plain: string): Promise<boolean> {
+  try {
+    const sha1 = createHash("sha1").update(plain).digest("hex").toUpperCase();
+    const prefix = sha1.slice(0, 5);
+    const suffix = sha1.slice(5);
+
+    const resp = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`, {
+      headers: { "Add-Padding": "true" },
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!resp.ok) return false;
+
+    const text = await resp.text();
+    for (const line of text.split("\n")) {
+      const [hash, countStr] = line.split(":");
+      if (hash?.trim().toUpperCase() === suffix && parseInt(countStr ?? "0", 10) > 0) {
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    console.warn("[password] HIBP check failed, skipping");
+    return false;
+  }
 }
 
 /**

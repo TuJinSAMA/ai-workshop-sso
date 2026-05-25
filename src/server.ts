@@ -27,6 +27,8 @@ async function main(): Promise<void> {
 
   const server = http.createServer((req, res) => {
     const url = req.url ?? "/";
+    const r = req as http.IncomingMessage & { originalUrl?: string };
+
     if (url === "/oidc" || url.startsWith("/oidc/") || url.startsWith("/oidc?")) {
       // oidc-provider's Koa app routes against `req.url` using the default
       // unprefixed route paths (`/auth`, `/token`, …), but its urlFor()
@@ -34,10 +36,20 @@ async function main(): Promise<void> {
       // `ctx.request.url`. So we strip /oidc from url but stash the original
       // so the emitted absolute URLs (discovery, redirects, iss) stay correct.
       // See node_modules/oidc-provider/lib/helpers/oidc_context.js urlFor().
-      (req as http.IncomingMessage & { originalUrl?: string }).originalUrl = url;
+      r.originalUrl = url;
       req.url = url.replace(/^\/oidc/, "") || "/";
       return oidcCallback(req, res);
     }
+
+    // Spec §6.2 requires standard OIDC discovery paths at the bare domain.
+    // Forward /.well-known/* → oidc-provider (rewriting to /oidc/.well-known/*
+    // by setting originalUrl so urlFor() generates correct absolute URLs).
+    if (url.startsWith("/.well-known/")) {
+      r.originalUrl = `/oidc${url}`;
+      req.url = url; // already the correct path for oidc-provider's router
+      return oidcCallback(req, res);
+    }
+
     return nextHandler(req, res);
   });
 

@@ -3,10 +3,11 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
-import { hashPassword } from "@/lib/password";
+import { hashPassword, isPasswordPwned } from "@/lib/password";
 import { setSsoCookie } from "@/lib/cookies";
 import { audit } from "@/lib/audit";
 import { postAuthRedirect } from "@/lib/interaction";
+import { sendVerificationEmail } from "@/lib/email-verification";
 
 const Body = z.object({
   email: z.email().max(254),
@@ -37,7 +38,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const { email, password, uid } = parsed.data;
   const e = env();
 
-  // TODO(M3): HIBP k-anonymity weak-password check before hashing.
+  const pwned = await isPasswordPwned(password);
+  if (pwned) {
+    return NextResponse.json(
+      { error: "password_compromised", message: "This password has appeared in a data breach. Please choose a different password." },
+      { status: 422 },
+    );
+  }
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -61,6 +68,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   });
   await setSsoCookie(session.id);
   await audit({ event: "register", userId: user.id, ipAddress: ip, userAgent: ua });
+
+  // Send verification email (non-blocking — don't fail registration if email fails).
+  sendVerificationEmail(user.id, user.email).catch((err) =>
+    console.error("[register] Failed to send verification email:", err),
+  );
 
   return postAuthRedirect(req, uid ?? null, user.id);
 }

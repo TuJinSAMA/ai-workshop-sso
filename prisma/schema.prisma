@@ -21,9 +21,11 @@ model User {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  sessions        Session[]
-  identities      Identity[]
-  loginAttempts   LoginAttempt[]
+  sessions                 Session[]
+  identities               Identity[]
+  loginAttempts            LoginAttempt[]
+  passwordResetTokens      PasswordResetToken[]
+  emailVerificationTokens  EmailVerificationToken[]
 
   @@index([email])
 }
@@ -100,6 +102,37 @@ model SigningKey {
   status          KeyStatus
   createdAt       DateTime @default(now())
   retiredAt       DateTime?
+}
+
+// One-time token for password reset (spec §12).
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique   // SHA-256 of the raw token, hex-encoded
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user      User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// One-time token for email verification (spec §10).
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  userId    String
+  email     String   // The email address to verify (could be new email for change-email flow)
+  tokenHash String   @unique   // SHA-256 of the raw token, hex-encoded
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user      User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model LoginAttempt {
