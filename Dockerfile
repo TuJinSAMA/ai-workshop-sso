@@ -36,10 +36,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && groupadd --system --gid 1001 nodejs \
  && useradd  --system --uid 1001 --gid nodejs nextjs
 
-# Next.js standalone output bundles node_modules + .next/server.
-COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Custom server: ship the whole build + node_modules (no standalone output
+# since custom servers are incompatible with `output: "standalone"`).
+COPY --from=build --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=build --chown=nextjs:nodejs /app/public ./public
+COPY --from=build --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=build --chown=nextjs:nodejs /app/package.json ./package.json
+COPY --from=build --chown=nextjs:nodejs /app/next.config.ts ./next.config.ts
+COPY --from=build --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
+COPY --from=build --chown=nextjs:nodejs /app/src ./src
 
 # Prisma schema + generated client engine files (needed at runtime).
 COPY --from=build --chown=nextjs:nodejs /app/prisma ./prisma
@@ -47,4 +52,4 @@ COPY --from=build --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 
 USER nextjs
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["node", "node_modules/.bin/tsx", "src/server.ts"]
