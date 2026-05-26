@@ -1,0 +1,26 @@
+services:
+  app:
+    image: ${APP_IMAGE:?APP_IMAGE is required}
+    container_name: ai-workshop-sso-app
+    restart: unless-stopped
+    env_file:
+      - ${APP_ENV_FILE:-/opt/ai-workshop-sso/.env.production}
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - shared-infra
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+networks:
+  shared-infra:
+    external: true
+    name: shared-infra
