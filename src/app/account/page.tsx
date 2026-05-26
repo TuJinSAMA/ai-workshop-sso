@@ -1,3 +1,4 @@
+import type { Session } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import {
@@ -157,7 +158,7 @@ export default async function AccountPage({ searchParams }: Props) {
             <p className="text-sm text-zinc-500">暂无活跃会话。</p>
           ) : (
             <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-              {sessions.map((s) => {
+              {sessions.map((s: Session) => {
                 const isCurrent = s.id === current.id;
                 return (
                   <li
