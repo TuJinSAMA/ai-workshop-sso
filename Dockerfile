@@ -26,13 +26,17 @@ RUN pnpm build
 FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production \
     PORT=3000 \
-    HOSTNAME=0.0.0.0
+    HOSTNAME=0.0.0.0 \
+    PNPM_HOME="/pnpm" \
+    PATH="/pnpm:$PATH"
 WORKDIR /app
 
-# Runtime native libs only (no compiler toolchain).
+# Runtime native libs only (no compiler toolchain). pnpm is needed for
+# `pnpm prisma migrate deploy` during deploy.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
+ && corepack enable && corepack prepare pnpm@10.15.0 --activate \
  && groupadd --system --gid 1001 nodejs \
  && useradd  --system --uid 1001 --gid nodejs nextjs
 
