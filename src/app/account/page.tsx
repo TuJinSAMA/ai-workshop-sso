@@ -1,5 +1,13 @@
 import { redirect } from "next/navigation";
 
+import {
+  Alert,
+  AuthLayout,
+  FieldLabel,
+  PrimaryButton,
+  SecondaryButton,
+  TextInput,
+} from "@/components/AuthLayout";
 import { prisma } from "@/lib/db";
 import { readSsoCookie } from "@/lib/cookies";
 
@@ -19,6 +27,11 @@ const successMessages: Record<string, string> = {
   verification_sent: "验证邮件已发送，请检查收件箱。",
   password_changed: "密码已修改，其他设备上的会话已注销。",
   email_change_sent: "验证邮件已发送到新邮箱，请点击链接完成更改。",
+};
+
+const infoMessages: Record<string, string> = {
+  interaction_expired:
+    "你已登录，但来自客户端产品的本次登录请求已过期。请回到原产品重新点击登录，即可被自动放行。",
 };
 
 const errorMessages: Record<string, string> = {
@@ -47,169 +60,184 @@ export default async function AccountPage({ searchParams }: Props) {
 
   const params = await searchParams;
   const successMsg = params.message ? (successMessages[params.message] ?? null) : null;
+  const infoMsg = params.message ? (infoMessages[params.message] ?? null) : null;
   const errorMsg = params.error ? (errorMessages[params.error] ?? "发生未知错误，请重试。") : null;
 
   return (
-    <main className="mx-auto max-w-3xl p-8 space-y-10">
-      {/* Header */}
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">个人中心</h1>
-          <p className="text-sm text-gray-600">{user.email}</p>
-        </div>
-        <form method="POST" action="/api/logout">
-          <button
-            type="submit"
-            className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-100"
-          >
-            退出登录
-          </button>
-        </form>
-      </header>
-
-      {/* Flash messages */}
-      {successMsg && (
-        <div className="rounded border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800">
-          {successMsg}
-        </div>
-      )}
-      {errorMsg && (
-        <div className="rounded border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {errorMsg}
-        </div>
-      )}
-
-      {/* Profile section */}
-      <section id="profile">
-        <h2 className="mb-3 text-lg font-medium">邮箱</h2>
-        <div className="flex items-center gap-3 mb-4">
-          <span className="text-sm">{user.email}</span>
+    <AuthLayout
+      title="个人中心"
+      subtitle={
+        <span className="flex items-center gap-2">
+          <span>{user.email}</span>
           {user.emailVerified ? (
-            <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-800">已验证</span>
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200">
+              已验证
+            </span>
           ) : (
-            <span className="rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800">未验证</span>
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
+              未验证
+            </span>
           )}
-          {!user.emailVerified && (
-            <form method="POST" action="/api/email/send-verification" className="inline">
-              <button type="submit" className="text-xs text-blue-600 underline">发送验证邮件</button>
+        </span>
+      }
+      width="wide"
+      footer={
+        <form method="POST" action="/api/logout" className="flex justify-center">
+          <SecondaryButton type="submit">退出登录</SecondaryButton>
+        </form>
+      }
+    >
+      <div className="space-y-6">
+        {successMsg && <Alert variant="success">{successMsg}</Alert>}
+        {infoMsg && <Alert variant="info">{infoMsg}</Alert>}
+        {errorMsg && <Alert variant="error">{errorMsg}</Alert>}
+
+        {/* Email */}
+        <Section title="邮箱" description="登录账号使用的邮箱地址">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-sm text-zinc-700 dark:text-zinc-200">{user.email}</span>
+            {!user.emailVerified && (
+              <form method="POST" action="/api/email/send-verification">
+                <SecondaryButton type="submit">发送验证邮件</SecondaryButton>
+              </form>
+            )}
+          </div>
+
+          <Disclosure summary="更改邮箱">
+            <form method="POST" action="/api/account/email" className="space-y-3">
+              <label className="block">
+                <FieldLabel>新邮箱</FieldLabel>
+                <TextInput type="email" name="newEmail" required autoComplete="email" />
+              </label>
+              <label className="block">
+                <FieldLabel>当前密码（用于确认操作）</FieldLabel>
+                <TextInput
+                  type="password"
+                  name="currentPassword"
+                  required
+                  autoComplete="current-password"
+                />
+              </label>
+              <PrimaryButton type="submit">发送验证邮件到新邮箱</PrimaryButton>
             </form>
-          )}
-        </div>
+          </Disclosure>
+        </Section>
 
-        <details className="rounded border border-gray-200">
-          <summary className="cursor-pointer px-4 py-3 text-sm font-medium hover:bg-gray-50">
-            更改邮箱
-          </summary>
-          <form method="POST" action="/api/account/email" className="space-y-3 p-4">
-            <label className="block">
-              <span className="block text-sm text-gray-700">新邮箱</span>
-              <input
-                type="email"
-                name="newEmail"
-                required
-                autoComplete="email"
-                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-              />
-            </label>
-            <label className="block">
-              <span className="block text-sm text-gray-700">当前密码（用于确认操作）</span>
-              <input
-                type="password"
-                name="currentPassword"
-                required
-                autoComplete="current-password"
-                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-              />
-            </label>
-            <button
-              type="submit"
-              className="rounded bg-black px-4 py-2 text-sm text-white hover:bg-gray-800"
-            >
-              发送验证邮件到新邮箱
-            </button>
-          </form>
-        </details>
-      </section>
+        {/* Password */}
+        <Section title="密码与安全" description="定期更换密码可有效降低账号风险">
+          <Disclosure summary="修改密码">
+            <form method="POST" action="/api/account/password" className="space-y-3">
+              <label className="block">
+                <FieldLabel>当前密码</FieldLabel>
+                <TextInput
+                  type="password"
+                  name="currentPassword"
+                  required
+                  autoComplete="current-password"
+                />
+              </label>
+              <label className="block">
+                <FieldLabel>新密码（至少 8 位）</FieldLabel>
+                <TextInput
+                  type="password"
+                  name="newPassword"
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                />
+              </label>
+              <PrimaryButton type="submit">更新密码</PrimaryButton>
+            </form>
+          </Disclosure>
+        </Section>
 
-      {/* Security section */}
-      <section id="security">
-        <h2 className="mb-3 text-lg font-medium">密码与安全</h2>
-        <details className="rounded border border-gray-200">
-          <summary className="cursor-pointer px-4 py-3 text-sm font-medium hover:bg-gray-50">
-            修改密码
-          </summary>
-          <form method="POST" action="/api/account/password" className="space-y-3 p-4">
-            <label className="block">
-              <span className="block text-sm text-gray-700">当前密码</span>
-              <input
-                type="password"
-                name="currentPassword"
-                required
-                autoComplete="current-password"
-                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-              />
-            </label>
-            <label className="block">
-              <span className="block text-sm text-gray-700">新密码（至少 8 位）</span>
-              <input
-                type="password"
-                name="newPassword"
-                required
-                minLength={8}
-                autoComplete="new-password"
-                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-              />
-            </label>
-            <button
-              type="submit"
-              className="rounded bg-black px-4 py-2 text-sm text-white hover:bg-gray-800"
-            >
-              更新密码
-            </button>
-          </form>
-        </details>
-      </section>
-
-      {/* Devices section */}
-      <section id="devices">
-        <h2 className="mb-3 text-lg font-medium">活跃设备</h2>
-        {sessions.length === 0 ? (
-          <p className="text-sm text-gray-600">暂无活跃会话。</p>
-        ) : (
-          <ul className="divide-y rounded border border-gray-200">
-            {sessions.map((s) => {
-              const isCurrent = s.id === current.id;
-              return (
-                <li key={s.id} className="flex items-center justify-between p-3">
-                  <div className="min-w-0">
-                    <div className="text-sm">
-                      <span className="font-medium">{truncate(s.userAgent, 80)}</span>
-                      {isCurrent && (
-                        <span className="ml-2 rounded bg-green-100 px-2 py-0.5 text-xs text-green-800">
-                          本机
+        {/* Devices */}
+        <Section title="活跃设备" description="可登出其他设备上的会话">
+          {sessions.length === 0 ? (
+            <p className="text-sm text-zinc-500">暂无活跃会话。</p>
+          ) : (
+            <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+              {sessions.map((s) => {
+                const isCurrent = s.id === current.id;
+                return (
+                  <li
+                    key={s.id}
+                    className="flex flex-wrap items-center justify-between gap-3 p-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="font-medium text-zinc-800 dark:text-zinc-100">
+                          {truncate(s.userAgent, 80)}
                         </span>
-                      )}
+                        {isCurrent && (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200">
+                            本机
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-1 text-xs text-zinc-500">
+                        {s.ipAddress ?? "—"} · 最近活跃{" "}
+                        {s.lastActiveAt.toISOString()}
+                      </div>
                     </div>
-                    <div className="mt-1 text-xs text-gray-500">
-                      {s.ipAddress ?? "—"} · 最近活跃 {s.lastActiveAt.toISOString()}
-                    </div>
-                  </div>
-                  {!isCurrent && (
-                    <form method="POST" action={`/api/sessions/${s.id}/revoke`}>
-                      <button
-                        type="submit"
-                        className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50"
-                      >
-                        撤销
-                      </button>
-                    </form>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+                    {!isCurrent && (
+                      <form method="POST" action={`/api/sessions/${s.id}/revoke`}>
+                        <SecondaryButton
+                          type="submit"
+                          className="border-red-200 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/40"
+                        >
+                          撤销
+                        </SecondaryButton>
+                      </form>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Section>
+      </div>
+    </AuthLayout>
+  );
+}
+
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          {title}
+        </h2>
+        {description && (
+          <p className="mt-0.5 text-xs text-zinc-500">{description}</p>
         )}
-      </section>
-    </main>
+      </div>
+      <div className="space-y-3">{children}</div>
+    </section>
+  );
+}
+
+function Disclosure({
+  summary,
+  children,
+}: {
+  summary: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="rounded-lg border border-zinc-200 dark:border-zinc-800">
+      <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-900">
+        {summary}
+      </summary>
+      <div className="border-t border-zinc-100 p-4 dark:border-zinc-800">{children}</div>
+    </details>
   );
 }

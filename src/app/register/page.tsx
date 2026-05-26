@@ -1,3 +1,12 @@
+import {
+  AuthLayout,
+  FieldLabel,
+  InlineLink,
+  PrimaryButton,
+  TextInput,
+} from "@/components/AuthLayout";
+import { getClientFromUid } from "@/lib/client-from-uid";
+
 type SearchParams = Promise<{ uid?: string }>;
 
 export default async function RegisterPage({
@@ -6,43 +15,42 @@ export default async function RegisterPage({
   searchParams: SearchParams;
 }) {
   const { uid } = await searchParams;
+  const client = await getClientFromUid(uid);
+
   const loginHref = uid ? `/login?uid=${encodeURIComponent(uid)}` : "/login";
+
   return (
-    <main className="mx-auto max-w-md p-8">
-      <h1 className="mb-6 text-2xl font-semibold">注册账号</h1>
+    <AuthLayout
+      clientName={client?.name}
+      title="注册账号"
+      subtitle={client ? undefined : "在 AI Workshop 创建账号"}
+      footer={
+        <span className="text-zinc-500">
+          已有账号？<InlineLink href={loginHref}>直接登录</InlineLink>
+        </span>
+      }
+    >
       <form method="POST" action="/api/register" className="space-y-4">
         {uid && <input type="hidden" name="uid" value={uid} />}
         <label className="block">
-          <span className="block text-sm text-gray-700">邮箱</span>
-          <input
-            type="email"
-            name="email"
-            required
-            autoComplete="email"
-            className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
-          />
+          <FieldLabel>邮箱</FieldLabel>
+          <TextInput type="email" name="email" required autoComplete="email" />
         </label>
         <label className="block">
-          <span className="block text-sm text-gray-700">密码</span>
-          <input
+          <FieldLabel>密码</FieldLabel>
+          <TextInput
             type="password"
             name="password"
             required
             minLength={8}
             autoComplete="new-password"
-            className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
           />
+          <span className="mt-1 block text-xs text-zinc-500">
+            至少 8 位，建议混合大小写字母与数字
+          </span>
         </label>
-        <button
-          type="submit"
-          className="w-full rounded bg-black px-4 py-2 text-white hover:bg-gray-800"
-        >
-          注册
-        </button>
+        <PrimaryButton type="submit">创建账号</PrimaryButton>
       </form>
-      <p className="mt-4 text-sm text-gray-600">
-        已有账号？<a className="text-blue-600 hover:underline" href={loginHref}>直接登录</a>
-      </p>
-    </main>
+    </AuthLayout>
   );
 }
