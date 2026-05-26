@@ -28,7 +28,8 @@ ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0 \
     PNPM_HOME="/pnpm" \
-    PATH="/pnpm:$PATH"
+    PATH="/pnpm:$PATH" \
+    COREPACK_HOME="/home/nextjs/.cache/node/corepack"
 WORKDIR /app
 
 # Runtime native libs only (no compiler toolchain). pnpm is needed for
@@ -38,7 +39,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/* \
  && corepack enable && corepack prepare pnpm@10.15.0 --activate \
  && groupadd --system --gid 1001 nodejs \
- && useradd  --system --uid 1001 --gid nodejs nextjs
+ && useradd  --system --uid 1001 --gid nodejs --create-home --home-dir /home/nextjs nextjs \
+ && mkdir -p /home/nextjs/.cache/node/corepack \
+ && chown -R nextjs:nodejs /home/nextjs
 
 # Custom server: ship the whole build + node_modules (no standalone output
 # since custom servers are incompatible with `output: "standalone"`).
