@@ -3,6 +3,7 @@ import { env } from "./env";
 import { getAllPrivateJwks, getCurrentSigningKey } from "./jwks";
 import { makePrismaAdapter } from "./oidc-adapter";
 import { audit } from "./audit";
+import { logoutSource, postLogoutSuccessSource } from "./logout-html";
 import {
   SSO_CHECK_DESCRIPTION,
   SSO_CHECK_REASON,
@@ -93,7 +94,11 @@ async function buildProvider(): Promise<Provider> {
       devInteractions: { enabled: false },
       revocation: { enabled: true },
       userinfo: { enabled: true },
-      rpInitiatedLogout: { enabled: true },
+      rpInitiatedLogout: {
+        enabled: true,
+        logoutSource,
+        postLogoutSuccessSource,
+      },
     },
 
     // Spec §7 requires email/email_verified in the id_token.

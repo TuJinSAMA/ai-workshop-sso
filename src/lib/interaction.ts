@@ -13,17 +13,25 @@ import { getProvider } from "./oidc-provider";
 
 export type LoginResult = { accountId: string };
 
+/**
+ * Resume an oidc-provider Interaction by uid, stamp the auth result and
+ * return the URL the browser should be 303'd to. Returns `null` if the
+ * interaction can no longer be found — this is *not* an exceptional case:
+ * it happens whenever the user replays a stale form (back button, two
+ * tabs, resubmit after a successful login that already consumed the
+ * interaction). Callers MUST handle null by redirecting somewhere sane
+ * rather than throwing — a thrown error here becomes a 500 inside
+ * /api/login and breaks the whole UX.
+ */
 export async function finishInteraction(
   uid: string,
   result: { login?: LoginResult; consent?: Record<string, unknown> },
-): Promise<string> {
+): Promise<string | null> {
   const provider = await getProvider();
-  // `provider.Interaction` is the model class registered for adapter('Interaction').
-  // .find() returns null/undefined if missing or expired.
   const Interaction = provider.Interaction;
   const interaction = await Interaction.find(uid);
   if (!interaction) {
-    throw new Error(`Interaction ${uid} not found or expired`);
+    return null;
   }
   interaction.result = { ...(interaction.lastSubmission ?? {}), ...result };
   // Keep the original TTL by passing remaining seconds.
@@ -34,16 +42,23 @@ export async function finishInteraction(
 
 /**
  * Build the post-auth redirect. If `uid` is present we resume the OIDC
- * authorization; otherwise we send the user to the account page.
+ * authorization; otherwise we send the user to the account page. If the
+ * referenced interaction is stale (consumed/expired/never-existed) we fall
+ * back to /account so the user lands in a known-good state rather than
+ * staring at a 500 page.
  */
 export async function postAuthRedirect(
   req: NextRequest,
   uid: string | null,
   accountId: string,
 ): Promise<NextResponse> {
-  const target = uid
-    ? await finishInteraction(uid, { login: { accountId } })
-    : new URL("/account", req.url).toString();
+  let target: string;
+  if (uid) {
+    const resumed = await finishInteraction(uid, { login: { accountId } });
+    target = resumed ?? new URL("/account?message=interaction_expired", req.url).toString();
+  } else {
+    target = new URL("/account", req.url).toString();
+  }
   // Use 303 so the browser switches the next request to GET (form-post pattern).
   return new NextResponse(null, { status: 303, headers: { Location: target } });
 }

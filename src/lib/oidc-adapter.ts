@@ -27,6 +27,7 @@ async function findClient(id: string): Promise<AdapterPayload | undefined> {
   // Return ClientMetadata shape expected by oidc-provider.
   const meta: ClientMetadata = {
     client_id: row.clientId,
+    client_name: row.name,
     // We store only the hash; use PKCE-only flow (token_endpoint_auth_method=none).
     token_endpoint_auth_method: "none",
     grant_types: ["authorization_code", "refresh_token"],
