@@ -1,7 +1,5 @@
 import type Provider from "oidc-provider";
-import type { ClientMetadata } from "oidc-provider";
 import { env } from "./env";
-import { prisma } from "./db";
 import { getAllPrivateJwks, getCurrentSigningKey } from "./jwks";
 import { makePrismaAdapter } from "./oidc-adapter";
 import { audit } from "./audit";
@@ -24,28 +22,6 @@ export function getProvider(): Promise<Provider> {
     globalForOidc.__oidcProvider = buildProvider();
   }
   return globalForOidc.__oidcProvider;
-}
-
-async function loadClientsFromDb(): Promise<ClientMetadata[]> {
-  const rows = await prisma.oAuthClient.findMany();
-  return rows.map((row: typeof rows[number]): ClientMetadata => ({
-    client_id: row.clientId,
-    // We store sha256(secret); oidc-provider needs the raw secret to verify
-    // client_secret_basic / _post. For Phase 0 the seed script prints the
-    // raw secret once; for production we'll switch on `none` (PKCE-only) or
-    // pivot to client_secret_jwt. Until then we accept that confidential
-    // clients are not yet usable until M3 implements internal API which
-    // returns the raw secret on creation.
-    //
-    // M1 ships with token_endpoint_auth_method=none so PKCE alone suffices.
-    client_secret: undefined,
-    token_endpoint_auth_method: "none",
-    grant_types: ["authorization_code", "refresh_token"],
-    response_types: ["code"],
-    redirect_uris: row.redirectUris,
-    post_logout_redirect_uris: row.postLogoutRedirectUris,
-    scope: row.allowedScopes.join(" "),
-  }));
 }
 
 async function buildProvider(): Promise<Provider> {
@@ -74,7 +50,11 @@ async function buildProvider(): Promise<Provider> {
   // time; an empty set leaves it unable to sign id_tokens).
   await getCurrentSigningKey();
   const jwks = await getAllPrivateJwks();
-  const clients = await loadClientsFromDb();
+
+  // Clients are loaded dynamically via the adapter (PrismaAdapter.find bridges
+  // to OAuthClient table), so we do NOT pass a static `clients` array here.
+  // This means new clients registered via /internal/clients are picked up
+  // immediately without a server restart.
 
   // Issuer carries the `/oidc` mount path so the `iss` claim and every
   // discovery URL is prefixed correctly. server.ts strips `/oidc` from
@@ -83,7 +63,6 @@ async function buildProvider(): Promise<Provider> {
   // so provider's urlFor() can recover the mount and emit absolute URLs.
   const provider = new ProviderCtor(e.ISSUER_URL + "/oidc", {
     adapter: makePrismaAdapter,
-    clients,
     jwks,
 
     pkce: { required: () => true },
@@ -117,10 +96,22 @@ async function buildProvider(): Promise<Provider> {
       rpInitiatedLogout: { enabled: true },
     },
 
+    // Spec §7 requires email/email_verified in the id_token.
+    // Setting conformIdTokenClaims=false makes oidc-provider include scope-based
+    // claims (email, name, picture) directly in the id_token for code flow,
+    // not only via the userinfo endpoint.
+    conformIdTokenClaims: false,
+
     // Always rotate refresh tokens, not just for offline_access. oidc-provider
     // stamps the rotated token as `consumed`; a second use throws InvalidGrant
     // and triggers grant revocation (see refresh_token.js line 121-127).
     rotateRefreshToken: true,
+
+    // Issue a refresh token whenever the client supports the refresh_token grant.
+    // The default behaviour requires `offline_access` in scope; we override that
+    // because all our clients are first-party and we always want rotation-capable
+    // long-lived sessions (spec §7: refresh_token TTL = 30 days, rotated).
+    issueRefreshToken: async (_ctx, client) => client.grantTypeAllowed("refresh_token"),
 
     interactions: {
       policy,
@@ -144,6 +135,39 @@ async function buildProvider(): Promise<Provider> {
           };
         },
       };
+    },
+
+    // Auto-grant consent for all first-party clients so no consent UI is needed.
+    // Any previously saved grant is reused; if none exists a new grant covering
+    // all requested scopes is created and persisted automatically.
+    async loadExistingGrant(ctx) {
+      const grantId =
+        ctx.oidc.result?.consent?.grantId ??
+        ctx.oidc.session?.grantIdFor(ctx.oidc.client!.clientId!);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const provider = ctx.oidc.provider as any;
+
+      if (grantId) {
+        const found = await provider.Grant.find(grantId);
+        if (found) return found;
+      }
+
+      // No existing grant — create one covering all requested scopes.
+      // Read scope directly from the stored authorization params so we handle
+      // both the first-visit and resume paths reliably.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rawScope: string = (ctx.oidc as any).params?.scope ?? "openid";
+
+      const grant = new provider.Grant({
+        accountId: ctx.oidc.account!.accountId,
+        clientId: ctx.oidc.client!.clientId!,
+      });
+
+      grant.addOIDCScope(rawScope);
+
+      await grant.save();
+      return grant;
     },
   });
 

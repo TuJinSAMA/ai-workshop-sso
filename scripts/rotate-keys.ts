@@ -2,6 +2,7 @@
  * Rotate JWKS signing key (spec Section 12.5).
  * Usage:  pnpm rotate:keys
  */
+import "dotenv/config";
 import { rotateSigningKey } from "../src/lib/jwks";
 import { prisma } from "../src/lib/db";
 

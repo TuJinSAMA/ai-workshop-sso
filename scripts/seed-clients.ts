@@ -6,6 +6,7 @@
  * clientId / redirectUris / postLogoutRedirectUris, and emit the
  * generated client_secret once (never persisted in plaintext).
  */
+import "dotenv/config";
 import { randomBytes, createHash } from "node:crypto";
 import { prisma } from "../src/lib/db";
 
