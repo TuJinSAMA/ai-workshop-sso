@@ -2,6 +2,7 @@ import type Provider from "oidc-provider";
 import { env } from "./env";
 import { getAllPrivateJwks, getCurrentSigningKey } from "./jwks";
 import { makePrismaAdapter } from "./oidc-adapter";
+import { prisma } from "./db";
 import { audit } from "./audit";
 import { logoutSource, postLogoutSuccessSource } from "./logout-html";
 import {
