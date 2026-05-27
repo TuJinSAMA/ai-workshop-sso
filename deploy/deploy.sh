@@ -76,10 +76,18 @@ done
 
 if [[ "$is_healthy" != "true" ]]; then
   echo "[deploy] New version failed healthcheck" >&2
-  if [[ -n "$previous_image" ]]; then
-    echo "[deploy] Rollback to: $previous_image"
+  echo "[deploy] ---- container state ----" >&2
+  docker inspect "$container_id" --format '{{json .State}}' >&2 || true
+  echo "[deploy] ---- container logs (last 200 lines) ----" >&2
+  docker logs --tail 200 "$container_id" >&2 || true
+  echo "[deploy] ---- healthcheck history ----" >&2
+  docker inspect "$container_id" --format '{{json .State.Health}}' >&2 || true
+  if [[ -n "$previous_image" && "$previous_image" != "$APP_IMAGE" ]]; then
+    echo "[deploy] Rollback to: $previous_image" >&2
     export APP_IMAGE="$previous_image"
     compose up -d --remove-orphans "$APP_SERVICE"
+  else
+    echo "[deploy] No safe rollback target, leaving failed container in place for inspection" >&2
   fi
   exit 1
 fi
