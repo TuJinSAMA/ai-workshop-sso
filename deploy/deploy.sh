@@ -5,13 +5,14 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="${COMPOSE_FILE:-$SCRIPT_DIR/docker-compose.prod.yml}"
 APP_SERVICE="${APP_SERVICE:-app}"
 IMAGE_NAME="${IMAGE_NAME:-ai-workshop-sso}"
-GHCR_OWNER="${GHCR_OWNER:?GHCR_OWNER is required}"
+ALIYUN_REGISTRY="${ALIYUN_REGISTRY:?ALIYUN_REGISTRY is required (e.g. registry-vpc.cn-wulanchabu.aliyuncs.com)}"
+ALIYUN_NAMESPACE="${ALIYUN_NAMESPACE:?ALIYUN_NAMESPACE is required}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 APP_ENV_FILE="${APP_ENV_FILE:-/opt/ai-workshop-sso/.env.production}"
 HEALTHCHECK_RETRIES="${HEALTHCHECK_RETRIES:-20}"
 HEALTHCHECK_SLEEP_SECONDS="${HEALTHCHECK_SLEEP_SECONDS:-3}"
 
-APP_IMAGE="ghcr.io/${GHCR_OWNER}/${IMAGE_NAME}:${IMAGE_TAG}"
+APP_IMAGE="${ALIYUN_REGISTRY}/${ALIYUN_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
 export APP_IMAGE APP_ENV_FILE
 
 compose() {
@@ -28,11 +29,11 @@ if [[ ! -f "$APP_ENV_FILE" ]]; then
   exit 1
 fi
 
-if [[ -n "${GHCR_USERNAME:-}" && -n "${GHCR_PAT:-}" ]]; then
-  echo "[deploy] Login to ghcr.io as ${GHCR_USERNAME}"
-  echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin >/dev/null
+if [[ -n "${ALIYUN_USERNAME:-}" && -n "${ALIYUN_PASSWORD:-}" ]]; then
+  echo "[deploy] Login to ${ALIYUN_REGISTRY} as ${ALIYUN_USERNAME}"
+  echo "$ALIYUN_PASSWORD" | docker login "$ALIYUN_REGISTRY" -u "$ALIYUN_USERNAME" --password-stdin >/dev/null
 else
-  echo "[deploy] Skip docker login (GHCR_USERNAME / GHCR_PAT not provided)"
+  echo "[deploy] Skip docker login (ALIYUN_USERNAME / ALIYUN_PASSWORD not provided)"
 fi
 
 previous_container_id="$(compose ps -q "$APP_SERVICE" || true)"

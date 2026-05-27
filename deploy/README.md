@@ -1,6 +1,8 @@
-# 生产部署说明（阿里云 + GHCR + GitHub Actions + shared-infra Caddy）
+# 生产部署说明（阿里云 ACR + GitHub Actions + shared-infra Caddy）
 
-自动化链路：`push main` → GitHub Actions 构建并推送 GHCR → SSH 到服务器执行 `deploy.sh`。
+自动化链路：`push main` → GitHub Actions 构建并推送阿里云 ACR → SSH 到服务器执行 `deploy.sh`（从 ACR 拉取镜像）。
+
+> 历史原因：曾使用 GHCR，但国内服务器拉取 GHCR 经常 `Run Command Timeout`，已改为阿里云 ACR。
 
 ## 1. 服务器目录结构
 
@@ -86,43 +88,64 @@ chmod 600 /opt/ai-workshop-sso/.env.production
 - 应用通过 `shared-postgres:5432` 访问数据库
 - 应用通过 `shared-redis:6379` 访问缓存
 
-## 5. GitHub Actions Secrets
+## 5. 阿里云 ACR 准备
 
-在 GitHub 仓库 Settings → Secrets → Actions 中配置以下 6 个 Secret：
+1. 登录阿里云容器镜像服务控制台（个人版即可）。
+2. **建议在与服务器同地域建仓库**，可使用 VPC 内网拉取（免流量费、最快）。
+   - 服务器在乌兰察布 → 在 `cn-wulanchabu` 建命名空间和仓库
+   - 跨地域也能用，但只能走公网（仍远快于 GHCR）
+3. 创建命名空间，例如 `ai-workshop`，访问权限设为「私有」。
+4. 创建镜像仓库 `ai-workshop-sso`，仓库类型「本地仓库」。
+5. 进入「访问凭证」，设置「固定密码」（个人版默认是临时密码，必须改成固定密码 CI 才能用）。
+6. 记录以下地址：
+   - 公网：`registry.<region>.aliyuncs.com`（CI 推送用）
+   - VPC（同地域服务器可用）：`registry-vpc.<region>.aliyuncs.com`（服务器拉取用）
 
-| Secret | 说明 |
-|--------|------|
-| `SERVER_HOST` | 服务器公网 IP |
-| `SERVER_PORT` | SSH 端口（默认 `22`） |
-| `SERVER_USER` | 部署用户，建议 `deploy` |
-| `SERVER_SSH_KEY` | 部署用户 SSH 私钥 |
-| `GHCR_USERNAME` | GitHub 用户名 |
-| `GHCR_PAT` | 有 `read:packages` 权限的 PAT |
+## 6. GitHub Actions Secrets
 
-## 6. 首次上线顺序
+在 GitHub 仓库 Settings → Secrets → Actions 中配置以下 Secret：
+
+| Secret | 必填 | 说明 |
+|--------|------|------|
+| `SERVER_HOST` | ✅ | 服务器公网 IP |
+| `SERVER_PORT` | ✅ | SSH 端口（默认 `22`） |
+| `SERVER_USER` | ✅ | 部署用户，建议 `deploy` |
+| `SERVER_SSH_KEY` | ✅ | 部署用户 SSH 私钥 |
+| `ALIYUN_REGISTRY` | ✅ | ACR **公网**地址，CI 推送使用，如 `registry.cn-wulanchabu.aliyuncs.com` |
+| `ALIYUN_REGISTRY_INTERNAL` | ⛔ 可选 | 服务器**拉取**用地址。**同地域**填 VPC 地址 `registry-vpc.cn-wulanchabu.aliyuncs.com`；跨地域可不填，会自动用公网地址 |
+| `ALIYUN_NAMESPACE` | ✅ | ACR 命名空间，如 `ai-workshop` |
+| `ALIYUN_USERNAME` | ✅ | ACR 登录用户名（控制台「访问凭证」页） |
+| `ALIYUN_PASSWORD` | ✅ | ACR 固定密码（务必在控制台设置「固定密码」） |
+
+## 7. 首次上线顺序
 
 1. 完成上述 §2 所有服务器手工准备
-2. DNS：`auth.aiprd.club` A 记录指向服务器 IP
-3. 安全组放行 22（SSH）、80、443
-4. push `main` → GitHub Actions 自动构建部署
-5. 验收：
+2. 完成 §5 阿里云 ACR 准备并在 §6 配置好 Secrets
+3. DNS：`auth.aiprd.club` A 记录指向服务器 IP
+4. 安全组放行 22（SSH）、80、443
+5. push `main` → GitHub Actions 自动构建部署
+6. 验收：
    ```bash
    curl -I https://auth.aiprd.club
    docker logs ai-workshop-sso-app --tail 100
    ```
-6. （手工一次）注册 OIDC client：
+7. （手工一次）注册 OIDC client：
    ```bash
    docker compose -f /opt/ai-workshop-sso/deploy/docker-compose.prod.yml exec app pnpm seed:clients
    ```
    将输出的 `client_id` / `client_secret` 同步到 `ai-course-copilot` 的 `.env.production` 并重启。
 
-## 7. 常用命令
+## 8. 常用命令
 
-手动发布指定版本：
+手动发布指定版本（在服务器上执行）：
 
 ```bash
 cd /opt/ai-workshop-sso/deploy
-IMAGE_TAG=<git_sha> GHCR_OWNER=<github_owner> ./deploy.sh
+export ALIYUN_REGISTRY='registry-vpc.cn-wulanchabu.aliyuncs.com'   # 同地域用 VPC；跨地域用公网
+export ALIYUN_NAMESPACE='<你的命名空间>'
+export ALIYUN_USERNAME='<ACR 用户名>'
+export ALIYUN_PASSWORD='<ACR 固定密码>'
+IMAGE_TAG=<git_sha> ./deploy.sh
 ```
 
 查看应用状态与日志：
@@ -132,9 +155,9 @@ docker compose -f /opt/ai-workshop-sso/deploy/docker-compose.prod.yml ps
 docker compose -f /opt/ai-workshop-sso/deploy/docker-compose.prod.yml logs -f app
 ```
 
-## 8. 验收与回滚
+## 9. 验收与回滚
 
-### 8.1 发布验收
+### 9.1 发布验收
 
 ```bash
 curl -I https://auth.aiprd.club
@@ -142,11 +165,15 @@ docker compose -f /opt/ai-workshop-sso/deploy/docker-compose.prod.yml ps
 docker compose -f /opt/ai-workshop-sso/deploy/docker-compose.prod.yml logs --tail=100 app
 ```
 
-### 8.2 回滚
+### 9.2 回滚
 
 ```bash
 cd /opt/ai-workshop-sso/deploy
-IMAGE_TAG=<previous_sha> GHCR_OWNER=<github_owner> ./deploy.sh
+export ALIYUN_REGISTRY='registry-vpc.cn-wulanchabu.aliyuncs.com'
+export ALIYUN_NAMESPACE='<你的命名空间>'
+export ALIYUN_USERNAME='<ACR 用户名>'
+export ALIYUN_PASSWORD='<ACR 固定密码>'
+IMAGE_TAG=<previous_sha> ./deploy.sh
 ```
 
 Prisma 迁移遵循 expand/contract 策略，回滚前后镜像兼容。数据库迁移规则：
