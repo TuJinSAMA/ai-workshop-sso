@@ -52,6 +52,8 @@ COPY --from=build --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=build --chown=nextjs:nodejs /app/next.config.ts ./next.config.ts
 COPY --from=build --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
 COPY --from=build --chown=nextjs:nodejs /app/src ./src
+# Ops scripts (seed:clients, rotate:keys, prisma migrate deploy, etc.).
+COPY --from=build --chown=nextjs:nodejs /app/scripts ./scripts
 
 # Prisma schema + generated client engine files (needed at runtime).
 COPY --from=build --chown=nextjs:nodejs /app/prisma ./prisma

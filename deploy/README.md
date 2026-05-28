@@ -129,11 +129,15 @@ chmod 600 /opt/ai-workshop-sso/.env.production
    curl -I https://auth.aiprd.club
    docker logs ai-workshop-sso-app --tail 100
    ```
-7. （手工一次）注册 OIDC client：
+7. （手工一次）注册 OIDC client（容器已在跑时直接用 `docker exec`，无需 `APP_IMAGE`）：
    ```bash
-   docker compose -f /opt/ai-workshop-sso/deploy/docker-compose.prod.yml exec app pnpm seed:clients
+   docker exec ai-workshop-sso-app pnpm seed:clients
    ```
+   需要轮换 secret：`docker exec -e ROTATE_SECRET=1 ai-workshop-sso-app pnpm seed:clients`
+
    将输出的 `client_id` / `client_secret` 同步到 `ai-course-copilot` 的 `.env.production` 并重启。
+
+   > 若报 `Cannot find module '/app/scripts/seed-clients.ts'`，说明当前镜像未包含 `scripts/`（需先合并含 Dockerfile 修复的提交并重新部署）。
 
 ## 8. 常用命令
 
