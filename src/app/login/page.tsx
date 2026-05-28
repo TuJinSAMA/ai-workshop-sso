@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { AuthLayout, InlineLink } from "@/components/AuthLayout";
 import { LoginForm } from "@/components/LoginForm";
 import { getClientFromUid } from "@/lib/client-from-uid";
@@ -27,7 +29,9 @@ export default async function LoginPage({
         </span>
       }
     >
-      <LoginForm uid={uid} />
+      <Suspense fallback={<p className="text-sm text-zinc-500">加载登录表单…</p>}>
+        <LoginForm uid={uid} />
+      </Suspense>
     </AuthLayout>
   );
 }

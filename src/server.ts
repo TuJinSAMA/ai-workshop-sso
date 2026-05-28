@@ -54,8 +54,10 @@ async function main(): Promise<void> {
   });
 
   server.listen(port, hostname, () => {
-    console.log(`> ai-workshop-sso ready on http://${hostname}:${port} (dev=${dev})`);
-    console.log(`> OIDC discovery: http://${hostname}:${port}/oidc/.well-known/openid-configuration`);
+    const issuer = process.env.ISSUER_URL ?? `http://localhost:${port}`;
+    console.log(`> ai-workshop-sso listening on ${hostname}:${port} (dev=${dev})`);
+    console.log(`> Open in browser: ${issuer}  (use ISSUER_URL — not 0.0.0.0)`);
+    console.log(`> OIDC discovery: ${issuer}/oidc/.well-known/openid-configuration`);
   });
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import {
@@ -13,7 +14,10 @@ import { loginErrorMessage } from "@/lib/auth-form-messages";
 
 const networkErrorMessage = "网络异常，请检查连接后重试。";
 
-export function LoginForm({ uid }: { uid?: string }) {
+export function LoginForm({ uid: uidFromPage }: { uid?: string }) {
+  const searchParams = useSearchParams();
+  const uid = uidFromPage ?? searchParams.get("uid") ?? undefined;
+
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 

@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { AuthLayout, InlineLink } from "@/components/AuthLayout";
 import { RegisterForm } from "@/components/RegisterForm";
 import { getClientFromUid } from "@/lib/client-from-uid";
@@ -25,7 +27,9 @@ export default async function RegisterPage({
         </span>
       }
     >
-      <RegisterForm uid={uid} />
+      <Suspense fallback={<p className="text-sm text-zinc-500">加载注册表单…</p>}>
+        <RegisterForm uid={uid} />
+      </Suspense>
     </AuthLayout>
   );
 }

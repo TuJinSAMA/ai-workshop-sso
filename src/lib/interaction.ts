@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getProvider } from "./oidc-provider";
+import { absoluteIssuerUrl } from "./issuer-url";
 
 // Bridge between Next route handlers (Web-fetch req/res, no Node objects)
 // and oidc-provider's req/res-based interaction API.
@@ -48,7 +49,7 @@ export async function finishInteraction(
  * staring at a 500 page.
  */
 export async function postAuthRedirect(
-  req: NextRequest,
+  _req: NextRequest,
   uid: string | null,
   accountId: string,
   opts?: { json?: boolean },
@@ -56,9 +57,11 @@ export async function postAuthRedirect(
   let target: string;
   if (uid) {
     const resumed = await finishInteraction(uid, { login: { accountId } });
-    target = resumed ?? new URL("/account?message=interaction_expired", req.url).toString();
+    target = resumed
+      ? absoluteIssuerUrl(resumed)
+      : absoluteIssuerUrl("/account?message=interaction_expired");
   } else {
-    target = new URL("/account", req.url).toString();
+    target = absoluteIssuerUrl("/account");
   }
   // JSON clients (LoginForm / RegisterForm fetch) cannot reliably read Location on
   // manual redirect responses — return an explicit URL instead.
