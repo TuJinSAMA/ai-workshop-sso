@@ -120,7 +120,7 @@ ai-workshop-sso/
 │   │   ├── interaction.ts    ✓  bridge：Next 路由完成 oidc-provider Interaction
 │   │   └── oidc-provider.ts  ✓  Prisma adapter + DB clients + 私钥 JWKS
 │   ├── server.ts             ✓  custom Node server：/oidc/* 转 oidc-provider，其余走 Next
-│   └── middleware.ts         ✓  /api/internal/* 鉴权
+│   └── proxy.ts                ✓  Edge proxy：/api/internal/* 鉴权 + 敏感 query 清理
 ├── deploy/
 │   └── Caddyfile             ✓  auth.aiprd.club 自动 HTTPS + 安全头
 ├── docker-compose.yml        ✓  本地 dev infra（pg + redis）
