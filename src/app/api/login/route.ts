@@ -8,6 +8,7 @@ import { setSsoCookie } from "@/lib/cookies";
 import { audit } from "@/lib/audit";
 import { loginByEmail, loginByIp } from "@/lib/rate-limit";
 import { postAuthRedirect } from "@/lib/interaction";
+import { authFormErrorRedirect } from "@/lib/auth-form-redirect";
 import { wantsJsonResponse } from "@/lib/request-format";
 import { checkAndAlertAnomalousLogin } from "@/lib/login-anomaly";
 
@@ -37,10 +38,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const raw = await parseBody(req);
   const parsed = Body.safeParse(raw);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "invalid_request", issues: parsed.error.issues },
-      { status: 400 },
-    );
+    if (isJson) {
+      return NextResponse.json(
+        { error: "invalid_request", issues: parsed.error.issues },
+        { status: 400 },
+      );
+    }
+    const uidRaw =
+      typeof raw === "object" && raw !== null && "uid" in raw
+        ? String((raw as Record<string, unknown>).uid ?? "")
+        : "";
+    return authFormErrorRedirect("/login", "invalid_request", {
+      uid: uidRaw || undefined,
+    });
   }
   const { email, password, uid } = parsed.data;
   const e = env();
@@ -53,13 +63,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     loginByIp.limit(ip),
   ]);
   if (!emailGate.success || !ipGate.success) {
-    return NextResponse.json(
-      {
-        error: "rate_limited",
-        retryAfterMs: Math.max(emailGate.resetMs, ipGate.resetMs),
-      },
-      { status: 429 },
-    );
+    const retryAfterMs = Math.max(emailGate.resetMs, ipGate.resetMs);
+    if (isJson) {
+      return NextResponse.json({ error: "rate_limited", retryAfterMs }, { status: 429 });
+    }
+    return authFormErrorRedirect("/login", "rate_limited", { uid, retryAfterMs });
   }
 
   const user = await prisma.user.findUnique({ where: { email } });
@@ -81,7 +89,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       userAgent: ua,
       metadata: { reason },
     });
-    return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
+    if (isJson) {
+      return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
+    }
+    return authFormErrorRedirect("/login", "invalid_credentials", { uid });
   };
 
   if (!user || !user.passwordHash) return failAndLog("no_user_or_password");

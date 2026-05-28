@@ -8,6 +8,7 @@ import { setSsoCookie } from "@/lib/cookies";
 import { audit } from "@/lib/audit";
 import { postAuthRedirect } from "@/lib/interaction";
 import { sendVerificationEmail } from "@/lib/email-verification";
+import { authFormErrorRedirect } from "@/lib/auth-form-redirect";
 import { wantsJsonResponse } from "@/lib/request-format";
 
 const Body = z.object({
@@ -32,25 +33,44 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const raw = await parseBody(req);
   const parsed = Body.safeParse(raw);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "invalid_request", issues: parsed.error.issues },
-      { status: 400 },
-    );
+    if (isJson) {
+      return NextResponse.json(
+        { error: "invalid_request", issues: parsed.error.issues },
+        { status: 400 },
+      );
+    }
+    const uidRaw =
+      typeof raw === "object" && raw !== null && "uid" in raw
+        ? String((raw as Record<string, unknown>).uid ?? "")
+        : "";
+    return authFormErrorRedirect("/register", "invalid_request", {
+      uid: uidRaw || undefined,
+    });
   }
   const { email, password, uid } = parsed.data;
   const e = env();
 
   const pwned = await isPasswordPwned(password);
   if (pwned) {
-    return NextResponse.json(
-      { error: "password_compromised", message: "This password has appeared in a data breach. Please choose a different password." },
-      { status: 422 },
-    );
+    if (isJson) {
+      return NextResponse.json(
+        {
+          error: "password_compromised",
+          message:
+            "This password has appeared in a data breach. Please choose a different password.",
+        },
+        { status: 422 },
+      );
+    }
+    return authFormErrorRedirect("/register", "password_compromised", { uid });
   }
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    return NextResponse.json({ error: "email_taken" }, { status: 409 });
+    if (isJson) {
+      return NextResponse.json({ error: "email_taken" }, { status: 409 });
+    }
+    return authFormErrorRedirect("/register", "email_taken", { uid });
   }
 
   const passwordHash = await hashPassword(password);

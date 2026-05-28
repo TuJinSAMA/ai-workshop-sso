@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 
 import {
   Alert,
@@ -19,11 +19,22 @@ export function LoginForm({ uid: uidFromPage }: { uid?: string }) {
   const searchParams = useSearchParams();
   const uid = uidFromPage ?? searchParams.get("uid") ?? undefined;
 
+  const urlError = useMemo(() => {
+    const code = searchParams.get("error");
+    if (!code) return null;
+    const retryRaw = searchParams.get("retryAfterMs");
+    const retryAfterMs = retryRaw ? Number(retryRaw) : undefined;
+    return loginErrorMessage(
+      code,
+      Number.isFinite(retryAfterMs) ? retryAfterMs : undefined,
+    );
+  }, [searchParams]);
+
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const displayError = error ?? urlError;
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
     setError(null);
     setLoading(true);
 
@@ -49,7 +60,7 @@ export function LoginForm({ uid: uidFromPage }: { uid?: string }) {
   return (
     <ClientPostForm action="/api/login" onSubmit={onSubmit} className="space-y-4" noValidate>
       {uid ? <input type="hidden" name="uid" value={uid} /> : null}
-      {error ? <Alert variant="error">{error}</Alert> : null}
+      {displayError ? <Alert variant="error">{displayError}</Alert> : null}
       <label className="block">
         <FieldLabel>邮箱</FieldLabel>
         <TextInput

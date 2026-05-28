@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 
 import {
   Alert,
@@ -19,11 +19,16 @@ export function RegisterForm({ uid: uidFromPage }: { uid?: string }) {
   const searchParams = useSearchParams();
   const uid = uidFromPage ?? searchParams.get("uid") ?? undefined;
 
+  const urlError = useMemo(() => {
+    const code = searchParams.get("error");
+    return code ? registerErrorMessage(code) : null;
+  }, [searchParams]);
+
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const displayError = error ?? urlError;
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
     setError(null);
     setLoading(true);
 
@@ -47,7 +52,7 @@ export function RegisterForm({ uid: uidFromPage }: { uid?: string }) {
   return (
     <ClientPostForm action="/api/register" onSubmit={onSubmit} className="space-y-4" noValidate>
       {uid ? <input type="hidden" name="uid" value={uid} /> : null}
-      {error ? <Alert variant="error">{error}</Alert> : null}
+      {displayError ? <Alert variant="error">{displayError}</Alert> : null}
       <label className="block">
         <FieldLabel>邮箱</FieldLabel>
         <TextInput

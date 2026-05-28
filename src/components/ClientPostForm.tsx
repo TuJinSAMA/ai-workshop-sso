@@ -1,6 +1,14 @@
 "use client";
 
-import type { FormEvent, ReactNode } from "react";
+import { useSyncExternalStore, type FormEvent, ReactNode } from "react";
+
+function useHydrated(): boolean {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+}
 
 type ClientPostFormProps = {
   action: string;
@@ -11,8 +19,9 @@ type ClientPostFormProps = {
 };
 
 /**
- * Client form with fetch handler — still declares method="POST" + action so a
- * hydration/JS failure falls back to the API route instead of GET on the page URL.
+ * Client form with fetch handler. Declares method="POST" + action for no-JS
+ * fallback; always preventDefault once hydrated so we never double-submit.
+ * Pre-hydration native POST is handled by API 303 back to the auth page.
  */
 export function ClientPostForm({
   action,
@@ -21,11 +30,19 @@ export function ClientPostForm({
   noValidate,
   children,
 }: ClientPostFormProps) {
+  const hydrated = useHydrated();
+
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!hydrated) return;
+    void onSubmit(e);
+  }
+
   return (
     <form
       method="POST"
       action={action}
-      onSubmit={onSubmit}
+      onSubmit={handleSubmit}
       className={className}
       noValidate={noValidate}
     >
