@@ -51,6 +51,7 @@ export async function postAuthRedirect(
   req: NextRequest,
   uid: string | null,
   accountId: string,
+  opts?: { json?: boolean },
 ): Promise<NextResponse> {
   let target: string;
   if (uid) {
@@ -58,6 +59,11 @@ export async function postAuthRedirect(
     target = resumed ?? new URL("/account?message=interaction_expired", req.url).toString();
   } else {
     target = new URL("/account", req.url).toString();
+  }
+  // JSON clients (LoginForm / RegisterForm fetch) cannot reliably read Location on
+  // manual redirect responses — return an explicit URL instead.
+  if (opts?.json) {
+    return NextResponse.json({ redirect: target });
   }
   // Use 303 so the browser switches the next request to GET (form-post pattern).
   return new NextResponse(null, { status: 303, headers: { Location: target } });

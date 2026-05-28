@@ -8,6 +8,7 @@ import { setSsoCookie } from "@/lib/cookies";
 import { audit } from "@/lib/audit";
 import { postAuthRedirect } from "@/lib/interaction";
 import { sendVerificationEmail } from "@/lib/email-verification";
+import { wantsJsonResponse } from "@/lib/request-format";
 
 const Body = z.object({
   email: z.email().max(254),
@@ -27,6 +28,7 @@ async function parseBody(req: NextRequest): Promise<unknown> {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const isJson = wantsJsonResponse(req);
   const raw = await parseBody(req);
   const parsed = Body.safeParse(raw);
   if (!parsed.success) {
@@ -52,8 +54,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const passwordHash = await hashPassword(password);
+  const skipVerify = e.SKIP_EMAIL_VERIFICATION;
   const user = await prisma.user.create({
-    data: { email, passwordHash, passwordAlgo: "argon2id" },
+    data: {
+      email,
+      passwordHash,
+      passwordAlgo: "argon2id",
+      ...(skipVerify ? { emailVerified: true } : {}),
+    },
   });
 
   const ip = ipFromRequest(req);
@@ -69,12 +77,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   await setSsoCookie(session.id);
   await audit({ event: "register", userId: user.id, ipAddress: ip, userAgent: ua });
 
-  // Send verification email (non-blocking — don't fail registration if email fails).
-  sendVerificationEmail(user.id, user.email).catch((err) =>
-    console.error("[register] Failed to send verification email:", err),
-  );
+  if (!skipVerify) {
+    sendVerificationEmail(user.id, user.email).catch((err) =>
+      console.error("[register] Failed to send verification email:", err),
+    );
+  }
 
-  return postAuthRedirect(req, uid ?? null, user.id);
+  return postAuthRedirect(req, uid ?? null, user.id, { json: isJson });
 }
 
 function ipFromRequest(req: NextRequest): string | null {

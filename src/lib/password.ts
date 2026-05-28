@@ -2,6 +2,8 @@ import argon2 from "argon2";
 import bcryptjs from "bcryptjs";
 import { createHash } from "node:crypto";
 
+import { env } from "./env";
+
 // Argon2id parameters recommended by spec (Section 10).
 const ARGON2_OPTIONS: argon2.Options = {
   type: argon2.argon2id,
@@ -41,6 +43,8 @@ export async function verifyPassword(
  * On network failure, logs and returns false to avoid blocking registration.
  */
 export async function isPasswordPwned(plain: string): Promise<boolean> {
+  if (env().SKIP_HIBP_CHECK) return false;
+
   try {
     const sha1 = createHash("sha1").update(plain).digest("hex").toUpperCase();
     const prefix = sha1.slice(0, 5);

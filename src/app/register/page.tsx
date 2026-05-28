@@ -1,10 +1,5 @@
-import {
-  AuthLayout,
-  FieldLabel,
-  InlineLink,
-  PrimaryButton,
-  TextInput,
-} from "@/components/AuthLayout";
+import { AuthLayout, InlineLink } from "@/components/AuthLayout";
+import { RegisterForm } from "@/components/RegisterForm";
 import { getClientFromUid } from "@/lib/client-from-uid";
 
 type SearchParams = Promise<{ uid?: string }>;
@@ -30,27 +25,7 @@ export default async function RegisterPage({
         </span>
       }
     >
-      <form method="POST" action="/api/register" className="space-y-4">
-        {uid && <input type="hidden" name="uid" value={uid} />}
-        <label className="block">
-          <FieldLabel>邮箱</FieldLabel>
-          <TextInput type="email" name="email" required autoComplete="email" />
-        </label>
-        <label className="block">
-          <FieldLabel>密码</FieldLabel>
-          <TextInput
-            type="password"
-            name="password"
-            required
-            minLength={8}
-            autoComplete="new-password"
-          />
-          <span className="mt-1 block text-xs text-zinc-500">
-            至少 8 位，建议混合大小写字母与数字
-          </span>
-        </label>
-        <PrimaryButton type="submit">创建账号</PrimaryButton>
-      </form>
+      <RegisterForm uid={uid} />
     </AuthLayout>
   );
 }

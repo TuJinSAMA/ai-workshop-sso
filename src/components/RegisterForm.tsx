@@ -1,0 +1,74 @@
+"use client";
+
+import { useState, type FormEvent } from "react";
+
+import {
+  Alert,
+  FieldLabel,
+  PrimaryButton,
+  TextInput,
+} from "@/components/AuthLayout";
+import { postAuthApi } from "@/lib/auth-api-client";
+import { registerErrorMessage } from "@/lib/auth-form-messages";
+
+const networkErrorMessage = "网络异常，请检查连接后重试。";
+
+export function RegisterForm({ uid }: { uid?: string }) {
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    const form = e.currentTarget;
+    const email = (form.elements.namedItem("email") as HTMLInputElement).value.trim();
+    const password = (form.elements.namedItem("password") as HTMLInputElement).value;
+
+    const result = await postAuthApi("/api/register", { email, password, uid });
+
+    if (!result.ok) {
+      const message =
+        result.error === "network"
+          ? networkErrorMessage
+          : registerErrorMessage(result.error);
+      setError(message);
+      setLoading(false);
+      return;
+    }
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-4" noValidate>
+      {error ? <Alert variant="error">{error}</Alert> : null}
+      <label className="block">
+        <FieldLabel>邮箱</FieldLabel>
+        <TextInput
+          type="email"
+          name="email"
+          required
+          autoComplete="email"
+          disabled={loading}
+        />
+      </label>
+      <label className="block">
+        <FieldLabel>密码</FieldLabel>
+        <TextInput
+          type="password"
+          name="password"
+          required
+          minLength={8}
+          autoComplete="new-password"
+          disabled={loading}
+        />
+        <span className="mt-1 block text-xs text-zinc-500">
+          至少 8 位，建议混合大小写字母与数字
+        </span>
+      </label>
+      <PrimaryButton type="submit" disabled={loading}>
+        {loading ? "创建中…" : "创建账号"}
+      </PrimaryButton>
+    </form>
+  );
+}

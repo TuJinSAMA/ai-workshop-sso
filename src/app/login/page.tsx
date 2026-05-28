@@ -1,10 +1,5 @@
-import {
-  AuthLayout,
-  FieldLabel,
-  InlineLink,
-  PrimaryButton,
-  TextInput,
-} from "@/components/AuthLayout";
+import { AuthLayout, InlineLink } from "@/components/AuthLayout";
+import { LoginForm } from "@/components/LoginForm";
 import { getClientFromUid } from "@/lib/client-from-uid";
 
 type SearchParams = Promise<{ uid?: string }>;
@@ -32,23 +27,7 @@ export default async function LoginPage({
         </span>
       }
     >
-      <form method="POST" action="/api/login" className="space-y-4">
-        {uid && <input type="hidden" name="uid" value={uid} />}
-        <label className="block">
-          <FieldLabel>邮箱</FieldLabel>
-          <TextInput type="email" name="email" required autoComplete="email" />
-        </label>
-        <label className="block">
-          <FieldLabel>密码</FieldLabel>
-          <TextInput
-            type="password"
-            name="password"
-            required
-            autoComplete="current-password"
-          />
-        </label>
-        <PrimaryButton type="submit">登录</PrimaryButton>
-      </form>
+      <LoginForm uid={uid} />
     </AuthLayout>
   );
 }

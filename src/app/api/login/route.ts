@@ -8,6 +8,7 @@ import { setSsoCookie } from "@/lib/cookies";
 import { audit } from "@/lib/audit";
 import { loginByEmail, loginByIp } from "@/lib/rate-limit";
 import { postAuthRedirect } from "@/lib/interaction";
+import { wantsJsonResponse } from "@/lib/request-format";
 import { checkAndAlertAnomalousLogin } from "@/lib/login-anomaly";
 
 const Body = z.object({
@@ -32,6 +33,7 @@ function ipFromRequest(req: NextRequest): string {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const isJson = wantsJsonResponse(req);
   const raw = await parseBody(req);
   const parsed = Body.safeParse(raw);
   if (!parsed.success) {
@@ -125,5 +127,5 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     loginAt,
   }).catch((err) => console.error("[login] Anomaly check error:", err));
 
-  return postAuthRedirect(req, uid ?? null, user.id);
+  return postAuthRedirect(req, uid ?? null, user.id, { json: isJson });
 }

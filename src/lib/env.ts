@@ -33,6 +33,20 @@ const EnvSchema = z.object({
   JWKS_ENCRYPTION_KEY: z.string().optional().default(""),
 
   INTERNAL_API_TOKEN: z.string().min(16),
+
+  // Dev convenience: auto-verify email on register and skip verification mail.
+  SKIP_EMAIL_VERIFICATION: z
+    .enum(["true", "false", "1", "0", ""])
+    .optional()
+    .default("false")
+    .transform((v) => v === "true" || v === "1"),
+
+  // Dev convenience: skip Have I Been Pwned range lookup on register / password change.
+  SKIP_HIBP_CHECK: z
+    .enum(["true", "false", "1", "0", ""])
+    .optional()
+    .default("false")
+    .transform((v) => v === "true" || v === "1"),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
