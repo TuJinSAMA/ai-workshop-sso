@@ -7,6 +7,7 @@ import {
   PrimaryButton,
   TextInput,
 } from "@/components/AuthLayout";
+import { PostForm } from "@/components/PostForm";
 
 interface Props {
   searchParams: Promise<{ token?: string; error?: string }>;
@@ -44,7 +45,7 @@ export default async function ResetPasswordPage({ searchParams }: Props) {
           </Alert>
         )}
 
-        <form method="POST" action="/api/password/reset" className="space-y-4">
+        <PostForm action="/api/password/reset" className="space-y-4">
           <input type="hidden" name="token" value={token} />
           <label className="block">
             <FieldLabel>新密码</FieldLabel>
@@ -60,7 +61,7 @@ export default async function ResetPasswordPage({ searchParams }: Props) {
             </span>
           </label>
           <PrimaryButton type="submit">确认重置</PrimaryButton>
-        </form>
+        </PostForm>
       </div>
     </AuthLayout>
   );

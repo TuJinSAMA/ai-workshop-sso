@@ -9,6 +9,7 @@ import {
   SecondaryButton,
   TextInput,
 } from "@/components/AuthLayout";
+import { PostForm } from "@/components/PostForm";
 import { prisma } from "@/lib/db";
 import { readSsoCookie } from "@/lib/cookies";
 
@@ -83,9 +84,9 @@ export default async function AccountPage({ searchParams }: Props) {
       }
       width="wide"
       footer={
-        <form method="POST" action="/api/logout" className="flex justify-center">
+        <PostForm action="/api/logout" className="flex justify-center">
           <SecondaryButton type="submit">退出登录</SecondaryButton>
-        </form>
+        </PostForm>
       }
     >
       <div className="space-y-6">
@@ -98,14 +99,14 @@ export default async function AccountPage({ searchParams }: Props) {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm text-zinc-700 dark:text-zinc-200">{user.email}</span>
             {!user.emailVerified && (
-              <form method="POST" action="/api/email/send-verification">
+              <PostForm action="/api/email/send-verification">
                 <SecondaryButton type="submit">发送验证邮件</SecondaryButton>
-              </form>
+              </PostForm>
             )}
           </div>
 
           <Disclosure summary="更改邮箱">
-            <form method="POST" action="/api/account/email" className="space-y-3">
+            <PostForm action="/api/account/email" className="space-y-3">
               <label className="block">
                 <FieldLabel>新邮箱</FieldLabel>
                 <TextInput type="email" name="newEmail" required autoComplete="email" />
@@ -120,14 +121,14 @@ export default async function AccountPage({ searchParams }: Props) {
                 />
               </label>
               <PrimaryButton type="submit">发送验证邮件到新邮箱</PrimaryButton>
-            </form>
+            </PostForm>
           </Disclosure>
         </Section>
 
         {/* Password */}
         <Section title="密码与安全" description="定期更换密码可有效降低账号风险">
           <Disclosure summary="修改密码">
-            <form method="POST" action="/api/account/password" className="space-y-3">
+            <PostForm action="/api/account/password" className="space-y-3">
               <label className="block">
                 <FieldLabel>当前密码</FieldLabel>
                 <TextInput
@@ -148,7 +149,7 @@ export default async function AccountPage({ searchParams }: Props) {
                 />
               </label>
               <PrimaryButton type="submit">更新密码</PrimaryButton>
-            </form>
+            </PostForm>
           </Disclosure>
         </Section>
 
@@ -182,14 +183,14 @@ export default async function AccountPage({ searchParams }: Props) {
                       </div>
                     </div>
                     {!isCurrent && (
-                      <form method="POST" action={`/api/sessions/${s.id}/revoke`}>
+                      <PostForm action={`/api/sessions/${s.id}/revoke`}>
                         <SecondaryButton
                           type="submit"
                           className="border-red-200 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/40"
                         >
                           撤销
                         </SecondaryButton>
-                      </form>
+                      </PostForm>
                     )}
                   </li>
                 );

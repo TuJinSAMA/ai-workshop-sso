@@ -4,6 +4,7 @@ import {
   InlineLink,
   PrimaryButton,
 } from "@/components/AuthLayout";
+import { PostForm } from "@/components/PostForm";
 
 interface Props {
   searchParams: Promise<{ token?: string; error?: string }>;
@@ -59,9 +60,9 @@ export default async function VerifyEmailPage({ searchParams }: Props) {
           </p>
         )}
 
-        <form method="POST" action="/api/email/send-verification">
+        <PostForm action="/api/email/send-verification">
           <PrimaryButton type="submit">重新发送验证邮件</PrimaryButton>
-        </form>
+        </PostForm>
       </div>
     </AuthLayout>
   );

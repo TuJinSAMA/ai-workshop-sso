@@ -9,6 +9,7 @@ import {
   PrimaryButton,
   TextInput,
 } from "@/components/AuthLayout";
+import { ClientPostForm } from "@/components/ClientPostForm";
 import { postAuthApi } from "@/lib/auth-api-client";
 import { registerErrorMessage } from "@/lib/auth-form-messages";
 
@@ -44,7 +45,8 @@ export function RegisterForm({ uid: uidFromPage }: { uid?: string }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4" noValidate>
+    <ClientPostForm action="/api/register" onSubmit={onSubmit} className="space-y-4" noValidate>
+      {uid ? <input type="hidden" name="uid" value={uid} /> : null}
       {error ? <Alert variant="error">{error}</Alert> : null}
       <label className="block">
         <FieldLabel>邮箱</FieldLabel>
@@ -73,6 +75,6 @@ export function RegisterForm({ uid: uidFromPage }: { uid?: string }) {
       <PrimaryButton type="submit" disabled={loading}>
         {loading ? "创建中…" : "创建账号"}
       </PrimaryButton>
-    </form>
+    </ClientPostForm>
   );
 }

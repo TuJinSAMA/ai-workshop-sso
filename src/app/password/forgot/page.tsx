@@ -6,6 +6,7 @@ import {
   PrimaryButton,
   TextInput,
 } from "@/components/AuthLayout";
+import { PostForm } from "@/components/PostForm";
 
 interface Props {
   searchParams: Promise<{ sent?: string }>;
@@ -33,13 +34,13 @@ export default async function ForgotPasswordPage({ searchParams }: Props) {
           </p>
         </Alert>
       ) : (
-        <form method="POST" action="/api/password/forgot" className="space-y-4">
+        <PostForm action="/api/password/forgot" className="space-y-4">
           <label className="block">
             <FieldLabel>注册邮箱</FieldLabel>
             <TextInput type="email" name="email" required autoComplete="email" />
           </label>
           <PrimaryButton type="submit">发送重置邮件</PrimaryButton>
-        </form>
+        </PostForm>
       )}
     </AuthLayout>
   );
