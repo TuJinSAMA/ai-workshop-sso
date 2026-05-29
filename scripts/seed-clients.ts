@@ -26,6 +26,19 @@ const CLIENTS = [
     ],
     allowedScopes: ["openid", "email", "profile", "offline_access"],
   },
+  {
+    clientId: "aiprd",
+    name: "AIPRD",
+    redirectUris: [
+      "http://localhost:5173/api/auth/callback/sso",
+      "https://aiprd.club/api/auth/callback/sso",
+    ],
+    postLogoutRedirectUris: [
+      "http://localhost:5173",
+      "https://aiprd.club",
+    ],
+    allowedScopes: ["openid", "email", "profile", "offline_access"],
+  },
 ];
 
 async function main() {
@@ -37,7 +50,9 @@ async function main() {
     });
 
     let plainSecret: string | null = null;
-    let secretHash: string | undefined;
+    // Reuse the existing hash for the create input so upsert's create branch
+    // stays valid (Prisma validates both branches) even when we only update.
+    let secretHash: string | undefined = existing?.clientSecretHash;
     if (!existing || rotateSecret) {
       plainSecret = randomBytes(32).toString("base64url");
       secretHash = createHash("sha256").update(plainSecret).digest("hex");
@@ -50,7 +65,7 @@ async function main() {
         redirectUris: c.redirectUris,
         postLogoutRedirectUris: c.postLogoutRedirectUris,
         allowedScopes: c.allowedScopes,
-        ...(secretHash ? { clientSecretHash: secretHash } : {}),
+        ...(plainSecret ? { clientSecretHash: secretHash } : {}),
       },
       create: {
         clientId: c.clientId,

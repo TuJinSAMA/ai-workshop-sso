@@ -89,11 +89,27 @@ src/server.ts  (custom Node HTTP server, 入口: pnpm dev / pnpm start)
 pnpm test          # vitest run，tests/unit/*
 pnpm test:watch
 pnpm lint
+pnpm build         # prisma generate && next build（与 CI 一致）
 ```
 
 - 单元测试放在 `tests/unit/`，**不得依赖真实数据库**（见 `vitest.config.ts` 注释）。
 - 改 `crypto`、`password`、`oidc-adapter`、`sso-check`、`sensitive-query-params` 等纯逻辑时，应补或更新对应 unit test。
 - OIDC 端到端：`pnpm demo`（`scripts/demo-oidc-flow.ts`）；改 interaction / cookie / redirect 后建议本地跑一遍。
+
+---
+
+## 提交与推送（CI 门禁）
+
+**硬性要求**：任何 commit / push 之前，必须在本地跑通 CI 同款检查；未通过则**不得**提交并推送代码。
+
+```bash
+pnpm lint && pnpm build
+```
+
+CI 流水线（`.github/workflows/deploy.yml` 的 `ci` job）仅执行上述两步；本地失败即会在 `main` 推送时阻断部署。建议一并跑 `pnpm test`，避免逻辑回归。
+
+- 修复全部 lint / 类型 / 构建错误后再 `git commit`。
+- 不要依赖「推到远端再看 CI 结果」；不要把已知会红的变更推上 `main`。
 
 ---
 
@@ -142,6 +158,7 @@ README 里程碑表为准。撰写代码时：
 
 1. 读规格相关章节 + 本文件架构约束。
 2. 小步修改；OIDC/URL/cookie 类改动说明验证步骤（`pnpm demo` 或手动 authorize 流）。
-3. `pnpm test` + `pnpm lint` 通过后再声称完成。
-4. 不扩大 diff：不顺手重构无关文件、不引入新依赖除非必要。
-5. 文档：行为变更同步 `README.md`；**不要**除非用户要求才新建额外 markdown。
+3. 完成前本地验证：`pnpm lint && pnpm build`（必过）；`pnpm test`（建议）。
+4. 仅在上述检查全部通过后，才可 commit / push；未通过则继续修复，**禁止**推送会失败 CI 的代码。
+5. 不扩大 diff：不顺手重构无关文件、不引入新依赖除非必要。
+6. 文档：行为变更同步 `README.md`；**不要**除非用户要求才新建额外 markdown。
